@@ -1,10 +1,14 @@
 import { motion } from 'framer-motion'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useUser } from '@clerk/clerk-react'
 import { FiBell, FiMic, FiMicOff, FiMenu, FiMoon, FiSearch, FiSun } from 'react-icons/fi'
 
 import useSpeechRecognition from '../hooks/useSpeechRecognition'
+import { fetchSystemOwnership } from '../services/api'
 
 export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch, searchValue, onSearchValueChange, onMenuClick, onVoiceSubmit }) {
+  const { user } = useUser()
+  const [ownership, setOwnership] = useState(null)
   const {
     isSupported,
     isListening,
@@ -30,6 +34,25 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
     }
   }, [isListening, onSearchValueChange, transcript])
 
+  useEffect(() => {
+    let active = true
+
+    const loadOwnership = async () => {
+      try {
+        const snapshot = await fetchSystemOwnership()
+        if (active) setOwnership(snapshot || null)
+      } catch {
+        if (active) setOwnership(null)
+      }
+    }
+
+    void loadOwnership()
+
+    return () => {
+      active = false
+    }
+  }, [])
+
   const handleMicClick = () => {
     if (!isSupported) {
       clearTranscript()
@@ -45,6 +68,34 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
     clearTranscript()
     startListening()
   }
+
+  const displayName = user?.fullName?.trim()
+    || [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim()
+    || user?.username?.trim()
+    || user?.primaryEmailAddress?.emailAddress?.trim()
+    || 'Your account'
+
+  const userEmail = user?.primaryEmailAddress?.emailAddress?.trim().toLowerCase() || ''
+  const userId = user?.id?.trim() || ''
+  const isOwner = Boolean(
+    ownership?.owner_configured && (
+      (ownership?.owner_email && ownership.owner_email.toLowerCase() === userEmail) ||
+      (ownership?.owner_clerk_user_id && ownership.owner_clerk_user_id === userId)
+    )
+  )
+  const isAdmin = Boolean(
+    !isOwner && (
+      (ownership?.admin_emails || []).some((email) => String(email).toLowerCase() === userEmail) ||
+      (ownership?.admin_clerk_user_ids || []).some((id) => String(id) === userId)
+    )
+  )
+  const userRole = isOwner ? 'Owner' : isAdmin ? 'Admin' : user ? 'Member' : 'Guest'
+  const avatarText = displayName
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'U'
 
   return (
     <motion.div
@@ -116,11 +167,11 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
 
         <button type="button" className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
           <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-xs font-semibold text-white">
-            AS
+            {avatarText}
           </span>
           <span className="hidden md:block">
-            <span className="block text-xs text-white">Abhishek Singh</span>
-            <span className="block text-[11px] text-gray-500">Admin</span>
+            <span className="block text-xs text-white">{displayName}</span>
+            <span className="block text-[11px] text-gray-500">{userRole}</span>
           </span>
         </button>
 

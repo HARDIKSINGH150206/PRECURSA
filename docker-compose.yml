@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file:
+      - backend/.env
+    environment:
+      FRONTEND_ORIGIN: http://localhost:5174
+    ports:
+      - "8001:8001"
+    volumes:
+      - backend-data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8001}
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5174:80"
+
+volumes:
+  backend-data:

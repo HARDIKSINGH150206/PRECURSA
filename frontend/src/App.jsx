@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { SignedIn, SignedOut } from '@clerk/clerk-react'
+import { SignedIn, SignedOut, useAuth, useUser } from '@clerk/clerk-react'
 import { FiAlertTriangle, FiBox, FiNavigation, FiTrendingUp } from 'react-icons/fi'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
@@ -18,7 +18,7 @@ import Settings from './pages/Settings'
 import WeatherIntelligence from './pages/WeatherIntelligence'
 import Analytics from './pages/Analytics'
 import Login from './pages/Login'
-import { explainShipmentRisk, fetchDashboardOverview, fetchShipments, fetchVessels } from './services/api'
+import { explainShipmentRisk, fetchDashboardOverview, fetchShipments, fetchVessels, setApiAuthContext } from './services/api'
 import Signup from './pages/Signup'
 import { riskColor, riskLevelFromDRI } from './utils/risk'
 import './App.css'
@@ -64,6 +64,8 @@ function subtitleFromPage(page) {
 }
 
 function DashboardShell() {
+  const { user, isLoaded } = useUser()
+  const { getToken, isLoaded: authLoaded } = useAuth()
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark'
     return window.localStorage.getItem('precursa-theme') || 'dark'
@@ -83,6 +85,20 @@ function DashboardShell() {
   const [lastUpdated, setLastUpdated] = useState('--')
   const [activePage, setActivePage] = useState(parsePageFromHash)
   const [shipmentQuery, setShipmentQuery] = useState('')
+
+  useEffect(() => {
+    if (!isLoaded || !authLoaded) return
+
+    setApiAuthContext(
+      user
+        ? {
+            userId: user.id || null,
+            email: user.primaryEmailAddress?.emailAddress || null,
+            getToken
+          }
+        : null
+    )
+  }, [authLoaded, getToken, isLoaded, user])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme

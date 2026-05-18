@@ -3,7 +3,7 @@ import { FiActivity, FiAlertTriangle, FiCheckCircle, FiClock, FiCpu, FiInfo, FiR
 import { motion } from 'framer-motion'
 
 import Card from '../components/Card'
-import { fetchSystemHealth } from '../services/api'
+import { fetchOperatorSettings, fetchSystemHealth, saveOperatorSettings } from '../services/api'
 
 const refreshOptions = ['15s', '30s', '60s', '5m']
 const vesselFrequencyOptions = ['10s', '20s', '60s', '5m']
@@ -127,6 +127,9 @@ function Settings({ theme }) {
   const [health, setHealth] = useState(null)
   const [healthLoading, setHealthLoading] = useState(true)
   const [healthLatency, setHealthLatency] = useState(null)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [saveState, setSaveState] = useState('idle')
+  const [settingsUpdatedAt, setSettingsUpdatedAt] = useState(null)
   const [surfaceTheme, setSurfaceTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark'
     return window.localStorage.getItem('precursa-surface-theme') || 'dark'
@@ -188,6 +191,33 @@ function Settings({ theme }) {
   }, [surfaceTheme])
 
   useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const snapshot = await fetchOperatorSettings()
+        const data = snapshot || {}
+
+        if (data.risk_weights) setRiskWeights(data.risk_weights)
+        if (typeof data.auto_weighting === 'boolean') setAutoWeighting(data.auto_weighting)
+        if (data.weather_settings) setWeatherSettings(data.weather_settings)
+        if (data.vessel_settings) setVesselSettings(data.vessel_settings)
+        if (data.alerts) setAlerts(data.alerts)
+        if (data.dashboard_preferences) {
+          setWidgetVisibility(data.dashboard_preferences.widget_visibility || widgetVisibility)
+          if (data.dashboard_preferences.surface_theme) {
+            setSurfaceTheme(data.dashboard_preferences.surface_theme)
+          }
+        }
+        if (data.ai_copilot) setAiCopilot(data.ai_copilot)
+        if (data.updated_at) setSettingsUpdatedAt(data.updated_at)
+      } finally {
+        setSettingsLoaded(true)
+      }
+    }
+
+    loadSettings()
+  }, [])
+
+  useEffect(() => {
     const loadHealth = async () => {
       const startedAt = performance.now()
       try {
@@ -206,11 +236,61 @@ function Settings({ theme }) {
 
   const visibleWidgets = useMemo(() => Object.values(widgetVisibility).filter(Boolean).length, [widgetVisibility])
   const enabledAlerts = useMemo(() => alertTypes.filter(({ key }) => alerts[key]).length, [alerts])
+  const formattedSettingsUpdatedAt = useMemo(() => {
+    if (!settingsUpdatedAt) return 'Not saved yet'
+
+    try {
+      return new Date(settingsUpdatedAt).toLocaleString([], {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+    } catch {
+      return settingsUpdatedAt
+    }
+  }, [settingsUpdatedAt])
+
+  useEffect(() => {
+    if (!settingsLoaded) return
+
+    const timer = window.setTimeout(async () => {
+      setSaveState('saving')
+      try {
+        const response = await saveOperatorSettings({
+          risk_weights: riskWeights,
+          auto_weighting: autoWeighting,
+          weather_settings: weatherSettings,
+          vessel_settings: vesselSettings,
+          alerts,
+          dashboard_preferences: {
+            widget_visibility: widgetVisibility,
+            surface_theme: surfaceTheme,
+          },
+          ai_copilot: aiCopilot,
+        })
+        setSettingsUpdatedAt(response?.updated_at || new Date().toISOString())
+        setSaveState('saved')
+      } catch (error) {
+        setSaveState('error')
+      }
+    }, 800)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    settingsLoaded,
+    riskWeights,
+    autoWeighting,
+    weatherSettings,
+    vesselSettings,
+    alerts,
+    widgetVisibility,
+    surfaceTheme,
+    aiCopilot,
+  ])
 
   const healthCards = [
     {
       key: 'weather',
-      label: 'Weather API',
+      label: 'Weather service',
       tone: health?.services?.weather?.status === 'online' ? 'ok' : 'warn',
       detail: health?.services?.weather?.source || 'unknown source',
       sync: health?.services?.weather?.last_sync
@@ -228,6 +308,20 @@ function Settings({ theme }) {
       tone: health?.services?.gemini?.status === 'ready' ? 'ok' : 'danger',
       detail: health?.services?.gemini?.model || 'unavailable',
       sync: health?.services?.gemini?.last_sync
+    },
+    {
+      key: 'ownership',
+      label: 'System Owner',
+      tone: health?.services?.ownership?.owner_configured ? 'ok' : 'warn',
+      detail: health?.services?.ownership?.owner_email || health?.services?.ownership?.owner_clerk_user_id || 'not configured',
+      sync: health?.generated_at
+    },
+    {
+      key: 'observability',
+      label: 'Observability',
+      tone: health?.observability?.background_refresh?.status === 'healthy' ? 'ok' : 'warn',
+      detail: health?.observability?.background_refresh?.status || 'unknown',
+      sync: health?.observability?.background_refresh?.last_success_at || health?.observability?.started_at
     }
   ]
 
@@ -244,6 +338,7 @@ function Settings({ theme }) {
               <StatusPill label="Enterprise Control Panel" tone="info" />
               <StatusPill label={theme === 'light' ? 'Light mode active' : 'Dark mode active'} tone="neutral" />
               <StatusPill label={`Surface: ${surfaceTheme}`} tone="neutral" />
+              <StatusPill label={saveState === 'saving' ? 'Saving' : saveState === 'error' ? 'Save failed' : saveState === 'saved' ? 'Saved' : 'Ready'} tone={saveState === 'error' ? 'danger' : saveState === 'saving' ? 'warn' : 'ok'} />
             </div>
             <div>
               <h1 className="text-3xl font-semibold tracking-tight text-white">Settings</h1>
@@ -262,16 +357,32 @@ function Settings({ theme }) {
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">System sync</p>
               <p className="mt-2 text-sm font-medium text-cyan-100">{health?.generated_at || 'Fetching...'}</p>
             </div>
-            <div className="col-span-2 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-              <div>
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Latency</p>
-                <p className="text-sm font-semibold text-white">{healthLatency != null ? `${healthLatency} ms` : '—'}</p>
+                <div className="col-span-2 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Latency</p>
+                    <p className="text-sm font-semibold text-white">{healthLatency != null ? `${healthLatency} ms` : '—'}</p>
+                  </div>
+                  <FiClock className="h-5 w-5 text-cyan-300" />
+                </div>
+            <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-xs text-slate-400">
+              <div className="flex items-center justify-between gap-3">
+                <span>Backend uptime</span>
+                <span className="font-medium text-white">
+                  {health?.observability?.uptime_seconds != null
+                    ? `${Math.round(health.observability.uptime_seconds)}s`
+                    : '—'}
+                </span>
               </div>
-              <FiClock className="h-5 w-5 text-cyan-300" />
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <span>Last refresh</span>
+                <span className="font-medium text-white">
+                  {health?.observability?.background_refresh?.last_success_at || '—'}
+                </span>
+              </div>
             </div>
-          </div>
-        </div>
-      </motion.div>
+              </div>
+            </div>
+          </motion.div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
         <div className="space-y-6">
@@ -290,16 +401,12 @@ function Settings({ theme }) {
               <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-slate-100">Model version</p>
-                    <p className="text-xs text-slate-400">Risk engine release</p>
+                    <p className="text-sm font-medium text-slate-100">Configuration revision</p>
+                    <p className="text-xs text-slate-400">Last persisted settings snapshot</p>
                   </div>
-                  <StatusPill label="v2.8.4" tone="info" />
+                  <StatusPill label={formattedSettingsUpdatedAt} tone={settingsUpdatedAt ? 'info' : 'neutral'} />
                 </div>
                 <div className="mt-4 space-y-2 text-sm text-slate-300">
-                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                    <span>Last update</span>
-                    <span className="font-medium text-white">2026-04-23 08:14 UTC</span>
-                  </div>
                   <div className="flex items-center justify-between">
                     <span>Auto-weight status</span>
                     <span className={autoWeighting ? 'font-medium text-emerald-300' : 'font-medium text-amber-200'}>

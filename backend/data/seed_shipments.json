@@ -1,0 +1,38 @@
+[
+  {
+    "id": "SHP-001",
+    "origin": "Mumbai",
+    "destination": "Rotterdam",
+    "current_location": "Singapore Strait",
+    "lat": 1.264,
+    "lon": 103.819,
+    "cargo": "electronics"
+  },
+  {
+    "id": "SHP-002",
+    "origin": "Shanghai",
+    "destination": "Hamburg",
+    "current_location": "Singapore Strait",
+    "lat": 1.30,
+    "lon": 103.85,
+    "cargo": "pharma"
+  },
+  {
+    "id": "SHP-003",
+    "origin": "Hong Kong",
+    "destination": "Los Angeles",
+    "current_location": "Singapore Strait",
+    "lat": 1.28,
+    "lon": 103.80,
+    "cargo": "apparel"
+  },
+  {
+    "id": "SHP-004",
+    "origin": "Mumbai",
+    "destination": "Rotterdam",
+    "current_location": "Singapore Strait",
+    "lat": 1.26,
+    "lon": 103.82,
+    "cargo": "automotive"
+  }
+]

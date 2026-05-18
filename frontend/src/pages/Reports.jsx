@@ -438,7 +438,7 @@ function Reports({ shipments = [], vessels = [], overview = null, currentWeather
 
           <div className="grid min-w-[280px] grid-cols-2 gap-3 rounded-3xl border border-white/10 bg-slate-950/50 p-4">
             <div>
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Last update</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Live sync</p>
               <p className="mt-2 text-sm font-medium text-white">{lastUpdated}</p>
             </div>
             <div className="text-right">

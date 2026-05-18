@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     WEATHER_API_KEY: str = ""
     GEMINI_API_KEY: str = ""
     NEWS_API_KEY: str = ""
+    OWNER_EMAIL: str = ""
+    OWNER_CLERK_USER_ID: str = ""
+    ADMIN_EMAILS: str = ""
+    ADMIN_CLERK_USER_IDS: str = ""
+    SYSTEM_NAME: str = "Precursa"
+    CLERK_JWKS_URL: str = "https://api.clerk.com/v1/jwks"
+    CLERK_ISSUER: str = ""
+    STRUCTURED_LOGS: bool = True
+    SETTINGS_WRITE_RATE_LIMIT_MAX: int = 6
+    SETTINGS_WRITE_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"
     GEMINI_MODEL: str = "gemini-2.5-flash"

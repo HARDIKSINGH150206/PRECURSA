@@ -3,12 +3,18 @@
 frontend/.env
 backend/.env
 
+# sqlite state
+backend/data/precursa.sqlite3
+
 # node
 node_modules/
+frontend/dist/
 
 # python
 venv/
 __pycache__/
+.pytest_cache/
+.coverage
 
 # misc
 .DS_Store

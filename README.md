@@ -19,7 +19,7 @@ It combines live vessel data, weather conditions, and intelligent scoring to hel
    - Used to estimate port congestion
 
 2. **Weather Data**
-   - Weather API provides wind, rain, and cloud data
+   - Open-Meteo provides wind, rain, visibility, and condition data
    - Converted into a risk score
 
 3. **Risk Calculation (DRI)**
@@ -54,7 +54,7 @@ It combines live vessel data, weather conditions, and intelligent scoring to hel
 ### Backend
 - FastAPI
 - AIS Stream API
-- OpenWeather API
+- Open-Meteo API
 - Google Gemini API
 
 ### Frontend
@@ -68,6 +68,8 @@ It combines live vessel data, weather conditions, and intelligent scoring to hel
 
 - `GET /shipments` → Shipment data with risk scores  
 - `GET /vessels` → Live ship locations  
+- `GET /settings` / `PUT /settings` → Persisted operator settings  
+- `GET /health/system` → Service status and ownership snapshot  
 - `POST /explain` → AI explanation for a shipment  
 
 ---
@@ -79,3 +81,56 @@ It combines live vessel data, weather conditions, and intelligent scoring to hel
 ```bash
 git clone https://github.com/absksync/precursa.git
 cd precursa
+```
+
+### 2. Set environment variables
+
+Create:
+- `backend/.env`
+- `frontend/.env`
+
+For strict Clerk session verification, set:
+- `CLERK_JWKS_URL`
+- `CLERK_ISSUER`
+
+For production monitoring and write throttling, you can also tune:
+- `STRUCTURED_LOGS`
+- `SETTINGS_WRITE_RATE_LIMIT_MAX`
+- `SETTINGS_WRITE_RATE_LIMIT_WINDOW_SECONDS`
+
+### 3. Run the backend
+
+```bash
+cd backend
+./venv/bin/python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
+```
+
+### 4. Run the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### 5. Run tests
+
+```bash
+cd backend
+./venv/bin/python -m pytest
+```
+
+### 6. Build production containers
+
+```bash
+docker build -f backend/Dockerfile -t precursa-backend .
+docker build -f frontend/Dockerfile -t precursa-frontend \
+  --build-arg VITE_CLERK_PUBLISHABLE_KEY=your_clerk_key \
+  --build-arg VITE_API_BASE_URL=http://127.0.0.1:8001 .
+```
+
+### 7. Run with Docker Compose
+
+```bash
+docker compose up --build
+```

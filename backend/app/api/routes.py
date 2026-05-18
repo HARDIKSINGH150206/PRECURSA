@@ -1,10 +1,17 @@
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Dict, List
+from threading import Lock
+import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from app.models.shipment_data import SHIPMENTS
 from app.schemas.shipment_schema import ApiResponse, DashboardOverview, ExplainRequest, ExplainRiskResponse, ShipmentOut
+from app.schemas.settings_schema import OperatorSettings
+from app.core.identity import SystemPrincipal, SystemRole, ownership_status
+from app.core.storage import get_settings_payload, list_shipments, save_settings_payload
+from app.core.startup import observability_snapshot
+from app.api.deps import get_system_principal
 from app.services.ais_service import get_vessels_snapshot
 from app.services.global_risk_service import build_global_risk_intelligence
 from app.services.dri_service import calculate_dri
@@ -18,12 +25,56 @@ router = APIRouter(prefix="", tags=["precursa"])
 
 
 DEFAULT_WEATHER_ZONE = get_primary_zone()
+SETTINGS_KEY = "operator-settings"
+_WRITE_RATE_LIMIT_LOCK = Lock()
+_WRITE_RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+
+
+def _default_settings() -> dict[str, object]:
+    return OperatorSettings().model_dump()
+
+
+def _load_settings() -> OperatorSettings:
+    return OperatorSettings(**get_settings_payload(SETTINGS_KEY, _default_settings()))
+
+
+def _store_settings(payload: dict[str, object]) -> OperatorSettings:
+    saved = save_settings_payload(SETTINGS_KEY, payload)
+    return OperatorSettings(**saved)
+
+
+def _require_write_access(principal: SystemPrincipal) -> None:
+    if principal.role not in {SystemRole.owner, SystemRole.admin}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner or admin access required to update settings.",
+        )
+
+
+def _enforce_settings_rate_limit(client_ip: str | None) -> None:
+    key = client_ip or "unknown"
+    now = time.monotonic()
+    window = float(settings.SETTINGS_WRITE_RATE_LIMIT_WINDOW_SECONDS)
+    limit = int(settings.SETTINGS_WRITE_RATE_LIMIT_MAX)
+
+    with _WRITE_RATE_LIMIT_LOCK:
+        bucket = _WRITE_RATE_LIMIT_BUCKETS[key]
+        while bucket and now - bucket[0] > window:
+            bucket.popleft()
+
+        if len(bucket) >= limit:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Too many settings updates. Please try again later.",
+            )
+
+        bucket.append(now)
 
 
 def _build_shipments() -> List[ShipmentOut]:
     shipments: List[ShipmentOut] = []
 
-    for raw in SHIPMENTS:
+    for raw in list_shipments():
         dri_data = calculate_dri(raw)
         weather = dri_data["weather"]
 
@@ -54,6 +105,20 @@ def health() -> ApiResponse:
     return ApiResponse(data={"service": "precursa-api", "healthy": True})
 
 
+@router.get("/health/live", response_model=ApiResponse)
+def health_live() -> ApiResponse:
+    return ApiResponse(data={"service": "precursa-api", "healthy": True})
+
+
+@router.get("/health/ready", response_model=ApiResponse)
+def health_ready() -> ApiResponse:
+    return ApiResponse(data={
+        "service": "precursa-api",
+        "ready": True,
+        "observability": observability_snapshot(),
+    })
+
+
 @router.get("/health/system", response_model=ApiResponse)
 def system_health() -> ApiResponse:
     weather_snapshot = get_weather(DEFAULT_WEATHER_ZONE["lat"], DEFAULT_WEATHER_ZONE["lon"], zone_name=DEFAULT_WEATHER_ZONE["name"])
@@ -62,6 +127,7 @@ def system_health() -> ApiResponse:
 
     data = {
         "generated_at": now,
+        "observability": observability_snapshot(),
         "services": {
             "weather": {
                 "status": "online" if weather_snapshot else "degraded",
@@ -78,10 +144,34 @@ def system_health() -> ApiResponse:
                 "model": settings.GEMINI_MODEL,
                 "last_sync": now,
             },
+            "ownership": ownership_status(),
         },
     }
 
     return ApiResponse(data=data)
+
+
+@router.get("/system/ownership", response_model=ApiResponse)
+def system_ownership() -> ApiResponse:
+    return ApiResponse(data=ownership_status())
+
+
+@router.get("/settings", response_model=ApiResponse)
+def get_settings() -> ApiResponse:
+    settings_payload = _load_settings()
+    return ApiResponse(data=settings_payload.model_dump())
+
+
+@router.put("/settings", response_model=ApiResponse)
+def update_settings(
+    payload: OperatorSettings,
+    request: Request,
+    principal: SystemPrincipal = Depends(get_system_principal),
+) -> ApiResponse:
+    _enforce_settings_rate_limit(request.client.host if request.client else None)
+    _require_write_access(principal)
+    updated = _store_settings(payload.model_dump())
+    return ApiResponse(data=updated.model_dump())
 
 
 @router.get("/shipments", response_model=ApiResponse)
@@ -161,47 +251,6 @@ def dashboard_overview() -> ApiResponse:
     )
 
     return ApiResponse(data=overview.model_dump())
-
-
-@router.get("/dri/test", response_model=ApiResponse)
-def dri_test_endpoint() -> ApiResponse:
-    sample = {
-        "weather_severity": 65,
-        "congestion_score": 70,
-        "vessel_density": 55,
-        "route_length": 5000,
-        "visibility": 7,
-    }
-
-    from app.services.ml_service import predict_dri
-
-    try:
-        return ApiResponse(data=predict_dri(sample))
-    except Exception:
-        return ApiResponse(data={"predicted_dri": 0, "confidence": 0.0, "engine": "unavailable"})
-
-
-@router.get("/dri/test/lstm", response_model=ApiResponse)
-def dri_lstm_test_endpoint() -> ApiResponse:
-    sample_sequence = [
-        [52, 58, 44, 9],
-        [55, 59, 45, 9],
-        [58, 61, 46, 8.8],
-        [60, 62, 48, 8.7],
-        [62, 64, 49, 8.5],
-        [63, 66, 51, 8.4],
-        [65, 67, 52, 8.2],
-        [66, 68, 54, 8.1],
-        [68, 70, 55, 7.9],
-        [69, 72, 57, 7.8],
-    ]
-
-    from app.services.lstm_service import predict_dri as predict_lstm_dri
-
-    try:
-        return ApiResponse(data=predict_lstm_dri(sample_sequence))
-    except Exception:
-        return ApiResponse(data={"lstm_dri": 0, "trend": "stable", "engine": "unavailable"})
 
 
 @router.post("/explain-risk", response_model=ApiResponse)

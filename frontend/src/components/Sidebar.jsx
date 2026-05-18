@@ -70,7 +70,7 @@ export default function Sidebar({ activePage, hasError, lastUpdated, isOpen, onN
           <p className="mb-1 text-xs text-gray-500">System Status</p>
           <div className="flex items-center gap-2 text-sm text-white">
             <span className={`h-2.5 w-2.5 rounded-full ${hasError ? 'bg-red-400' : 'bg-sky-400'}`} />
-            <span>{hasError ? 'Partial Degraded' : 'All Systems Operational'}</span>
+            <span>{hasError ? 'Degraded' : 'Operational'}</span>
           </div>
           <p className="mt-2 text-xs text-gray-500">Updated {lastUpdated}</p>
         </div>
