@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Cell,
   Pie,
@@ -19,6 +19,8 @@ import Card from '../components/Card'
 import ChartCard from '../components/analytics/ChartCard'
 import InsightCard from '../components/analytics/InsightCard'
 import { fetchGlobalRiskIntelligence } from '../services/api'
+
+const MotionDiv = motion.div
 
 const windows = [
   { value: '24h', label: '24h' },
@@ -91,7 +93,7 @@ function GlobalRiskIntelligence() {
   const [error, setError] = useState('')
   const [lastFetch, setLastFetch] = useState('--')
 
-  const fetchFeed = async (nextWindow = windowRange) => {
+  const fetchFeed = useCallback(async (nextWindow = windowRange) => {
     setRefreshing(Boolean(payload))
     setLoading(!payload)
     try {
@@ -105,16 +107,23 @@ function GlobalRiskIntelligence() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [payload, windowRange])
 
   useEffect(() => {
-    void fetchFeed(windowRange)
-    const timer = window.setInterval(() => fetchFeed(windowRange), 180000)
-    return () => window.clearInterval(timer)
-  }, [windowRange])
+    const timer = window.setTimeout(() => {
+      void fetchFeed(windowRange)
+    }, 0)
+    const interval = window.setInterval(() => {
+      void fetchFeed(windowRange)
+    }, 180000)
+    return () => {
+      window.clearTimeout(timer)
+      window.clearInterval(interval)
+    }
+  }, [fetchFeed, windowRange])
 
-  const events = Array.isArray(payload?.events) ? payload.events : []
-  const summary = payload?.summary || {}
+  const events = useMemo(() => (Array.isArray(payload?.events) ? payload.events : []), [payload])
+  const summary = useMemo(() => payload?.summary || {}, [payload])
 
   const riskMix = useMemo(() => ([
     { name: 'High', value: summary.high_risk_articles || events.filter((item) => item.risk_level === 'high').length },
@@ -156,7 +165,7 @@ function GlobalRiskIntelligence() {
 
   return (
     <div className="space-y-6">
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         className="glass-card overflow-hidden border border-cyan-400/10 bg-gradient-to-br from-cyan-400/10 via-white/5 to-transparent p-6"
@@ -194,7 +203,7 @@ function GlobalRiskIntelligence() {
             </div>
           </div>
         </div>
-      </motion.div>
+      </MotionDiv>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Card className="p-4">

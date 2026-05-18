@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { createElement } from 'react'
 import {
   FiAlertTriangle,
   FiBarChart2,
@@ -12,6 +13,8 @@ import {
 } from 'react-icons/fi'
 
 import precursaLogo from '../assets/precursa-logo.png'
+
+const MotionButton = motion.button
 
 const menuItems = [
   { key: 'dashboard', label: 'Dashboard', icon: FiGrid },
@@ -49,7 +52,7 @@ export default function Sidebar({ activePage, hasError, lastUpdated, isOpen, onN
 
       <nav className="space-y-1.5">
         {menuItems.map(({ key, label, icon: Icon }) => (
-          <motion.button
+          <MotionButton
             key={label}
             whileHover={{ scale: 1.02 }}
             onClick={() => onNavigate(key)}
@@ -59,9 +62,9 @@ export default function Sidebar({ activePage, hasError, lastUpdated, isOpen, onN
                 : 'text-gray-400 hover:bg-white/5 hover:text-white'
             }`}
           >
-            <Icon size={15} />
+            {createElement(Icon, { size: 15 })}
             <span>{label}</span>
-          </motion.button>
+          </MotionButton>
         ))}
       </nav>
 

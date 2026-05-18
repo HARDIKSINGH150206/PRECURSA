@@ -6,6 +6,8 @@ import { FiBell, FiMic, FiMicOff, FiMenu, FiMoon, FiSearch, FiSun } from 'react-
 import useSpeechRecognition from '../hooks/useSpeechRecognition'
 import { fetchSystemOwnership } from '../services/api'
 
+const MotionDiv = motion.div
+
 export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch, searchValue, onSearchValueChange, onMenuClick, onVoiceSubmit }) {
   const { user } = useUser()
   const [ownership, setOwnership] = useState(null)
@@ -98,7 +100,7 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
     .join('') || 'U'
 
   return (
-    <motion.div
+    <MotionDiv
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       className="topbar-shell sticky top-0 z-10 mb-6 flex flex-wrap items-center justify-between gap-4 px-4 py-4"
@@ -181,6 +183,6 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
           </div>
         )}
       </div>
-    </motion.div>
+    </MotionDiv>
   )
 }

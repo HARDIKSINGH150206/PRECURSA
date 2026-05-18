@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { createElement, useEffect, useMemo, useState } from 'react'
 import { FiActivity, FiAlertTriangle, FiCheckCircle, FiClock, FiCpu, FiInfo, FiRefreshCw, FiSettings, FiShield, FiSliders, FiWifi } from 'react-icons/fi'
 import { motion } from 'framer-motion'
 
 import Card from '../components/Card'
 import { fetchOperatorSettings, fetchSystemHealth, saveOperatorSettings } from '../services/api'
+
+const MotionDiv = motion.div
 
 const refreshOptions = ['15s', '30s', '60s', '5m']
 const vesselFrequencyOptions = ['10s', '20s', '60s', '5m']
@@ -113,7 +115,7 @@ function SectionHeader({ icon: Icon, title, subtitle }) {
   return (
     <div className="flex items-start gap-3 border-b border-white/10 pb-4">
       <div className="mt-0.5 rounded-2xl border border-cyan-400/15 bg-cyan-400/10 p-2 text-cyan-200">
-        <Icon className="h-4 w-4" />
+        {createElement(Icon, { className: 'h-4 w-4' })}
       </div>
       <div>
         <h3 className="text-lg font-semibold text-white">{title}</h3>
@@ -202,7 +204,9 @@ function Settings({ theme }) {
         if (data.vessel_settings) setVesselSettings(data.vessel_settings)
         if (data.alerts) setAlerts(data.alerts)
         if (data.dashboard_preferences) {
-          setWidgetVisibility(data.dashboard_preferences.widget_visibility || widgetVisibility)
+          if (data.dashboard_preferences.widget_visibility) {
+            setWidgetVisibility(data.dashboard_preferences.widget_visibility)
+          }
           if (data.dashboard_preferences.surface_theme) {
             setSurfaceTheme(data.dashboard_preferences.surface_theme)
           }
@@ -269,7 +273,7 @@ function Settings({ theme }) {
         })
         setSettingsUpdatedAt(response?.updated_at || new Date().toISOString())
         setSaveState('saved')
-      } catch (error) {
+      } catch {
         setSaveState('error')
       }
     }, 800)
@@ -327,7 +331,7 @@ function Settings({ theme }) {
 
   return (
     <div className="space-y-6">
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         className="glass-card overflow-hidden border border-cyan-400/10 bg-gradient-to-br from-cyan-400/10 via-white/5 to-transparent p-6"
@@ -357,13 +361,13 @@ function Settings({ theme }) {
               <p className="text-xs uppercase tracking-[0.24em] text-slate-500">System sync</p>
               <p className="mt-2 text-sm font-medium text-cyan-100">{health?.generated_at || 'Fetching...'}</p>
             </div>
-                <div className="col-span-2 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Latency</p>
-                    <p className="text-sm font-semibold text-white">{healthLatency != null ? `${healthLatency} ms` : '—'}</p>
-                  </div>
-                  <FiClock className="h-5 w-5 text-cyan-300" />
-                </div>
+            <div className="col-span-2 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+              <div>
+                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Latency</p>
+                <p className="text-sm font-semibold text-white">{healthLatency != null ? `${healthLatency} ms` : '—'}</p>
+              </div>
+              <FiClock className="h-5 w-5 text-cyan-300" />
+            </div>
             <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-4 text-xs text-slate-400">
               <div className="flex items-center justify-between gap-3">
                 <span>Backend uptime</span>
@@ -380,9 +384,9 @@ function Settings({ theme }) {
                 </span>
               </div>
             </div>
-              </div>
-            </div>
-          </motion.div>
+          </div>
+        </div>
+          </MotionDiv>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.9fr)]">
         <div className="space-y-6">

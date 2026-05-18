@@ -2,13 +2,15 @@ import { SignIn } from '@clerk/clerk-react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 
+const MotionSection = motion.section
+
 export default function Login() {
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[linear-gradient(180deg,#05070a_0%,#0b0f14_100%)] px-4 py-10">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(56,189,248,0.14)_0%,rgba(5,7,10,0)_58%)]" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:32px_32px] opacity-[0.16]" />
 
-      <motion.section
+      <MotionSection
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -56,7 +58,7 @@ export default function Login() {
             Create an account
           </Link>
         </p>
-      </motion.section>
+      </MotionSection>
     </main>
   )
 }

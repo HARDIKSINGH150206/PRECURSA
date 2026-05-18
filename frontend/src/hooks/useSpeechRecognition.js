@@ -15,7 +15,6 @@ export default function useSpeechRecognition({
   const interimCallbackRef = useRef(onInterimTranscript)
   const finalCallbackRef = useRef(onFinalTranscript)
   const transcriptRef = useRef('')
-  const [isSupported, setIsSupported] = useState(true)
   const [isListening, setIsListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [error, setError] = useState('')
@@ -28,13 +27,13 @@ export default function useSpeechRecognition({
     finalCallbackRef.current = onFinalTranscript
   }, [onFinalTranscript])
 
+  const supported = typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)
+
   useEffect(() => {
     if (typeof window === 'undefined') return
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) {
-      setIsSupported(false)
-      setError('Voice input not supported')
       return
     }
 
@@ -99,7 +98,7 @@ export default function useSpeechRecognition({
   }, [continuous, interimResults, language])
 
   const startListening = useCallback(() => {
-    if (!isSupported) {
+    if (!supported) {
       setError('Voice input not supported')
       return
     }
@@ -127,7 +126,7 @@ export default function useSpeechRecognition({
       setError(message)
       setIsListening(false)
     }
-  }, [isListening, isSupported, timeoutMs])
+  }, [isListening, supported, timeoutMs])
 
   const stopListening = useCallback(() => {
     const recognition = recognitionRef.current
@@ -153,7 +152,7 @@ export default function useSpeechRecognition({
   }, [])
 
   return {
-    isSupported,
+    isSupported: supported,
     isListening,
     transcript,
     error,

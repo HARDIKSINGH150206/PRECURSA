@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { createElement } from 'react'
 import Card from './Card'
 
 export default function MetricCard({ icon: Icon, title, value, trend, trendTone = 'neutral' }) {
@@ -24,7 +25,7 @@ export default function MetricCard({ icon: Icon, title, value, trend, trendTone 
           <p className="mt-1 text-3xl font-semibold text-white">{value}</p>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-gray-200">
-          <Icon size={16} />
+          {Icon ? createElement(Icon, { size: 16 }) : null}
         </div>
       </div>
       <p className={`mt-3 text-xs ${toneClass}`}>{trend}</p>

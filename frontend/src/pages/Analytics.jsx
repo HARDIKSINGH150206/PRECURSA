@@ -151,29 +151,33 @@ export default function Analytics({ shipments = [], vessels = [], overview = nul
       ...breakdown.map((item) => `${item.name}:${item.value}`)
     ].join('|')
 
-    setHistory((previous) => {
-      if (previous[previous.length - 1]?.signature === signature) {
-        return previous
-      }
-
-      const next = [
-        ...previous,
-        {
-          signature,
-          label: formatShortTime(lastUpdated),
-          averageRisk,
-          highRiskShipments,
-          activeVessels,
-          reroutedShipments,
-          weather: factorValue(breakdown, 'weather'),
-          congestion: factorValue(breakdown, 'congestion'),
-          tariff: factorValue(breakdown, 'tariff'),
-          carrier: factorValue(breakdown, 'carrier')
+    const timer = window.setTimeout(() => {
+      setHistory((previous) => {
+        if (previous[previous.length - 1]?.signature === signature) {
+          return previous
         }
-      ]
 
-      return next.slice(-TREND_WINDOW)
-    })
+        const next = [
+          ...previous,
+          {
+            signature,
+            label: formatShortTime(lastUpdated),
+            averageRisk,
+            highRiskShipments,
+            activeVessels,
+            reroutedShipments,
+            weather: factorValue(breakdown, 'weather'),
+            congestion: factorValue(breakdown, 'congestion'),
+            tariff: factorValue(breakdown, 'tariff'),
+            carrier: factorValue(breakdown, 'carrier')
+          }
+        ]
+
+        return next.slice(-TREND_WINDOW)
+      })
+    }, 0)
+
+    return () => window.clearTimeout(timer)
   }, [activeVessels, averageRisk, breakdown, highRiskShipments, lastUpdated, loading, reroutedShipments, totalShipments])
 
   const trendSeries = history.length > 0

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -30,6 +30,8 @@ import { motion } from 'framer-motion'
 import Card from '../components/Card'
 import ChartCard from '../components/analytics/ChartCard'
 import InsightCard from '../components/analytics/InsightCard'
+
+const MotionDiv = motion.div
 
 const reportTypes = [
   {
@@ -300,7 +302,7 @@ function ReportTypeCard({ item, active, onGenerate, loading, highlight }) {
   )
 }
 
-function Reports({ shipments = [], vessels = [], overview = null, currentWeather = null, weatherZones = [], loading = false, lastUpdated = '--' }) {
+function Reports({ shipments = [], vessels = [], overview = null, currentWeather = null, weatherZones = [], lastUpdated = '--' }) {
   const [selectedType, setSelectedType] = useState('risk-summary')
   const [timeRange, setTimeRange] = useState('7d')
   const [customRange, setCustomRange] = useState({ start: '', end: '' })
@@ -310,7 +312,6 @@ function Reports({ shipments = [], vessels = [], overview = null, currentWeather
   const [statusMessage, setStatusMessage] = useState('')
 
   const routes = useMemo(() => groupRoutes(shipments), [shipments])
-  const trendSeries = useMemo(() => buildTrendSeries(shipments, overview, reportHistory), [overview, reportHistory, shipments])
   const reportInsights = useMemo(() => buildInsights({ shipments, vessels, overview, currentWeather, weatherZones, routes }), [currentWeather, overview, routes, shipments, vessels, weatherZones])
 
   const reportSnapshot = useMemo(() => buildReport({
@@ -323,13 +324,6 @@ function Reports({ shipments = [], vessels = [], overview = null, currentWeather
     weatherZones,
     reportHistory
   }), [currentWeather, overview, reportHistory, selectedType, shipments, timeRange, vessels, weatherZones])
-
-  useEffect(() => {
-    if (!report) {
-      setReport(reportSnapshot)
-      setReportHistory([reportSnapshot])
-    }
-  }, [report, reportSnapshot])
 
   const generateReport = (type = selectedType) => {
     setSelectedType(type)
@@ -418,7 +412,7 @@ function Reports({ shipments = [], vessels = [], overview = null, currentWeather
 
   return (
     <div className="space-y-6">
-      <motion.div
+      <MotionDiv
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         className="glass-card overflow-hidden border border-cyan-400/10 bg-gradient-to-br from-cyan-400/10 via-white/5 to-transparent p-6"
@@ -454,7 +448,7 @@ function Reports({ shipments = [], vessels = [], overview = null, currentWeather
             </div>
           </div>
         </div>
-      </motion.div>
+      </MotionDiv>
 
       <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
         {reportTypes.map((item) => (

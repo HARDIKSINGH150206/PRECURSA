@@ -1,12 +1,14 @@
 import { motion } from 'framer-motion'
 
 export default function Card({ children, className = '', as: Component = motion.div, ...props }) {
+  const Wrapper = Component || motion.div
+
   return (
-    <Component
+    <Wrapper
       {...props}
       className={`glass-card ${className}`}
     >
       {children}
-    </Component>
+    </Wrapper>
   )
 }

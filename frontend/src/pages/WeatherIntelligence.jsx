@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { Area, AreaChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ScatterChart, Scatter, ZAxis, Cell } from 'recharts'
 import { FiActivity, FiArrowRight, FiBarChart2, FiCloudRain, FiNavigation, FiZap } from 'react-icons/fi'
 
