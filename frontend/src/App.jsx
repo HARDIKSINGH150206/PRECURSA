@@ -70,6 +70,10 @@ function DashboardShell() {
     if (typeof window === 'undefined') return 'dark'
     return window.localStorage.getItem('precursa-theme') || 'dark'
   })
+  const [surfaceTheme, setSurfaceTheme] = useState(() => {
+    if (typeof window === 'undefined') return 'ultra-dark'
+    return window.localStorage.getItem('precursa-surface-theme') || 'ultra-dark'
+  })
   const [shipments, setShipments] = useState([])
   const [vessels, setVessels] = useState([])
   const [overview, setOverview] = useState(null)
@@ -108,6 +112,11 @@ function DashboardShell() {
     document.documentElement.dataset.theme = theme
     window.localStorage.setItem('precursa-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    document.documentElement.dataset.surface = surfaceTheme
+    window.localStorage.setItem('precursa-surface-theme', surfaceTheme)
+  }, [surfaceTheme])
 
   useEffect(() => {
     window.localStorage.setItem('precursa-sidebar-collapsed', String(sidebarCollapsed))
@@ -362,6 +371,8 @@ function DashboardShell() {
         onSearchValueChange={setShipmentQuery}
         onVoiceSubmit={handleVoiceSearch}
         onToggleTheme={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+        surfaceTheme={surfaceTheme}
+        onToggleSurfaceTheme={() => setSurfaceTheme((current) => (current === 'ultra-dark' ? 'dark' : 'ultra-dark'))}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
         onNavigate={navigateTo}

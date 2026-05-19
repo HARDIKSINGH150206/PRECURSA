@@ -5,11 +5,11 @@
 @layer base {
   html {
     color-scheme: dark;
-    @apply bg-[#05070a] text-white antialiased;
+    @apply bg-[#030507] text-white antialiased;
   }
 
   body {
-    @apply min-h-screen bg-[#05070a] text-white font-sans;
+    @apply min-h-screen bg-[#030507] text-white font-sans;
   }
 
   #root {
@@ -18,7 +18,7 @@
 }
 
 body {
-  @apply bg-[#05070a] text-white;
+  @apply bg-[#030507] text-white;
 }
 
 body::before,
@@ -31,10 +31,10 @@ body::after {
 }
 
 body::before {
-  opacity: 0.16;
+  opacity: 0.22;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 92px 92px;
   mask-image: radial-gradient(circle at center, rgba(0, 0, 0, 0.95) 30%, rgba(0, 0, 0, 0.35) 78%, transparent 100%);
   animation: grid-drift 28s linear infinite;
@@ -42,12 +42,12 @@ body::before {
 
 body::after {
   inset: -15%;
-  opacity: 0.24;
+  opacity: 0.34;
   background:
-    radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.16), transparent 28%),
-    radial-gradient(circle at 80% 20%, rgba(249, 115, 22, 0.1), transparent 26%),
-    radial-gradient(circle at 50% 70%, rgba(99, 102, 241, 0.1), transparent 30%);
-  filter: blur(26px);
+    radial-gradient(circle at 20% 30%, rgba(59, 130, 246, 0.12), transparent 28%),
+    radial-gradient(circle at 80% 20%, rgba(249, 115, 22, 0.08), transparent 26%),
+    radial-gradient(circle at 50% 70%, rgba(99, 102, 241, 0.08), transparent 30%);
+  filter: blur(30px);
   animation: ambient-shift 18s ease-in-out infinite alternate;
 }
 
@@ -72,7 +72,7 @@ html[data-theme='light'] body::after {
 }
 
 .app-shell {
-  background: linear-gradient(180deg, #05070a 0%, #070b10 100%);
+  background: linear-gradient(180deg, #030507 0%, #05080d 100%);
 }
 
 html[data-theme='light'] .app-shell {
@@ -80,24 +80,24 @@ html[data-theme='light'] .app-shell {
 }
 
 .sidebar-shell {
-  background: rgba(17, 24, 39, 0.92);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 10, 16, 0.98);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .topbar-shell {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(8, 12, 18, 0.78);
-  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(5, 8, 12, 0.9);
+  backdrop-filter: blur(28px);
 }
 
 .glass-card {
   position: relative;
   overflow: hidden;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 24px 60px -28px rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 28px 72px -34px rgba(0, 0, 0, 0.95);
   transition: transform 200ms ease, border-color 200ms ease, box-shadow 200ms ease, background 200ms ease;
 }
 
@@ -106,8 +106,8 @@ html[data-theme='light'] .app-shell {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), transparent 35%, rgba(255, 255, 255, 0.03));
-  opacity: 0.6;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 35%, rgba(255, 255, 255, 0.02));
+  opacity: 0.45;
 }
 
 .glass-card > * {
@@ -117,7 +117,7 @@ html[data-theme='light'] .app-shell {
 
 .glass-card:hover {
   transform: translateY(-1px);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 html[data-theme='light'] .sidebar-shell {

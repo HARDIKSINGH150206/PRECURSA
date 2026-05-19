@@ -134,7 +134,7 @@ function Settings({ theme }) {
   const [settingsUpdatedAt, setSettingsUpdatedAt] = useState(null)
   const [surfaceTheme, setSurfaceTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark'
-    return window.localStorage.getItem('precursa-surface-theme') || 'dark'
+    return window.localStorage.getItem('precursa-surface-theme') || 'ultra-dark'
   })
 
   const [riskWeights, setRiskWeights] = useState({
@@ -208,7 +208,9 @@ function Settings({ theme }) {
             setWidgetVisibility(data.dashboard_preferences.widget_visibility)
           }
           if (data.dashboard_preferences.surface_theme) {
-            setSurfaceTheme(data.dashboard_preferences.surface_theme)
+            setSurfaceTheme('ultra-dark')
+          } else {
+            setSurfaceTheme('ultra-dark')
           }
         }
         if (data.ai_copilot) setAiCopilot(data.ai_copilot)

@@ -9,6 +9,17 @@ import 'leaflet/dist/leaflet.css'
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 console.log('[auth] Clerk publishable key found:', Boolean(clerkPublishableKey))
 
+if (typeof document !== 'undefined') {
+  document.documentElement.dataset.surface = 'ultra-dark'
+}
+
+if (typeof window !== 'undefined') {
+  const storedSurfaceTheme = window.localStorage.getItem('precursa-surface-theme')
+  if (storedSurfaceTheme !== 'ultra-dark') {
+    window.localStorage.setItem('precursa-surface-theme', 'ultra-dark')
+  }
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     {clerkPublishableKey ? (
