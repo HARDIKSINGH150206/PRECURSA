@@ -52,7 +52,7 @@ It combines live vessel data, weather conditions, and intelligent scoring to hel
 ## 🧱 Tech Stack
 
 ### Backend
-- FastAPI
+- EXPRESS
 - AIS Stream API
 - Open-Meteo API
 - Google Gemini API
