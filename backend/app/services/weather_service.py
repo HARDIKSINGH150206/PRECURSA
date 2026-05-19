@@ -8,6 +8,7 @@ from typing import Dict, Iterable, List
 import requests
 
 from app.core.config import settings
+from app.core.storage import record_weather_snapshot
 
 
 logger = logging.getLogger(__name__)
@@ -280,11 +281,13 @@ def get_weather(lat: float, lon: float, zone_name: str | None = None) -> Dict[st
     live_weather = _fetch_open_meteo_weather(lat, lon, resolved_zone)
     if live_weather:
         _set_cached(lat, lon, live_weather)
+        record_weather_snapshot(live_weather, zone_name=resolved_zone)
         return live_weather
 
     _warn_once_per_window("Open-Meteo unavailable; using synthetic maritime weather fallback")
     synthetic = _synthetic_weather(lat, lon, resolved_zone, source="fallback:open-meteo-unavailable")
     _set_cached(lat, lon, synthetic)
+    record_weather_snapshot(synthetic, zone_name=resolved_zone)
     return synthetic
 
 

@@ -8,6 +8,7 @@ from typing import Deque, DefaultDict, Dict, List
 import websockets
 
 from app.core.config import settings
+from app.core.storage import list_vessels, upsert_vessels_snapshot
 
 
 logger = logging.getLogger(__name__)
@@ -28,16 +29,26 @@ def get_vessels_snapshot(limit: int = 80) -> List[Dict[str, object]]:
     if limit <= 0:
         return []
 
+    source_vessels = list(_VESSELS.values())
+    if not source_vessels:
+        source_vessels = list_vessels(limit=limit)
+
+    if _VESSELS:
+        source_slice = source_vessels[-limit:]
+    else:
+        source_slice = source_vessels[:limit]
+
     snapshot: List[Dict[str, object]] = []
-    for vessel in list(_VESSELS.values())[-limit:]:
+    for vessel in source_slice:
         vessel_key = int(vessel.get("mmsi") or 0)
-        trail = list(_VESSEL_TRAILS.get(vessel_key, deque()))
+        trail = list(_VESSEL_TRAILS.get(vessel_key, deque())) or list(vessel.get("trail") or [])
         snapshot.append({
             **vessel,
             "trail": trail,
         })
 
-    snapshot.sort(key=lambda item: float(item.get("timestamp_epoch") or 0), reverse=True)
+    if _VESSELS:
+        snapshot.sort(key=lambda item: float(item.get("timestamp_epoch") or 0), reverse=True)
     return snapshot
 
 
@@ -107,12 +118,14 @@ async def stream_ais() -> None:
                         "lat": lat_f,
                         "lon": lon_f,
                         "mmsi": vessel_key,
+                        "name": str(position.get("VesselName") or position.get("Name") or ""),
                         "sog": float(sog) if sog is not None else 0.0,
                         "timestamp_epoch": timestamp_epoch,
                         "timestamp": _now_iso(),
                         "trail": list(trail),
                     }
 
+                    upsert_vessels_snapshot([_VESSELS[vessel_key]])
                     _sync_exported_vessels()
         except Exception as exc:
             logger.exception("AIS stream error; reconnecting: %s", exc)

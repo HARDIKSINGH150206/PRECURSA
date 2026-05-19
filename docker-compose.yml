@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: precursa
+      POSTGRES_USER: precursa
+      POSTGRES_PASSWORD: precursa
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U precursa -d precursa"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
   backend:
     build:
       context: .
@@ -7,10 +25,14 @@ services:
       - backend/.env
     environment:
       FRONTEND_ORIGIN: http://localhost:5174
+      DATABASE_URL: postgresql://precursa:precursa@postgres:5432/precursa
     ports:
       - "8001:8001"
     volumes:
       - backend-data:/app/backend/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
       interval: 30s
@@ -33,3 +55,4 @@ services:
 
 volumes:
   backend-data:
+  postgres-data:
