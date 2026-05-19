@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
 import { SignedIn, SignedOut, useAuth, useUser } from '@clerk/clerk-react'
-import { FiAlertTriangle, FiArrowRight, FiBox, FiClock, FiNavigation, FiTrendingUp, FiWind } from 'react-icons/fi'
+import { FiAlertTriangle, FiBox, FiNavigation, FiTrendingUp } from 'react-icons/fi'
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import Card from './components/Card'
@@ -64,18 +63,6 @@ function subtitleFromPage(page) {
   return map[page] || 'Live Operations'
 }
 
-function dashboardRiskLabel(value) {
-  if (value >= 80) return 'Critical pressure'
-  if (value >= 65) return 'High pressure'
-  if (value >= 45) return 'Moderate pressure'
-  return 'Stable watch'
-}
-
-function toNumber(value, fallback = 0) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
 function DashboardShell() {
   const { user, isLoaded } = useUser()
   const { getToken, isLoaded: authLoaded } = useAuth()
@@ -98,7 +85,6 @@ function DashboardShell() {
   const [lastUpdated, setLastUpdated] = useState('--')
   const [activePage, setActivePage] = useState(parsePageFromHash)
   const [shipmentQuery, setShipmentQuery] = useState('')
-  const isDashboard = activePage === 'dashboard'
 
   useEffect(() => {
     if (!isLoaded || !authLoaded) return
@@ -299,18 +285,6 @@ function DashboardShell() {
     lastUpdated: weatherLastUpdated,
   } = useLiveWeather(selectedShipment?.route_coords || [])
 
-  const dashboardStatus = useMemo(() => {
-    const weatherSeverity = toNumber(currentWeather?.weather_severity ?? currentWeather?.risk, 0)
-    return {
-      riskLabel: dashboardRiskLabel(metrics.avgRisk),
-      weatherLabel: weatherSeverity >= 70 ? 'Storm watch' : weatherSeverity >= 45 ? 'Weather watch' : 'Weather steady',
-      weatherSeverity,
-      routeZones: Array.isArray(weatherZones) ? weatherZones.filter((zone) => toNumber(zone?.severity, 0) >= 65).length : 0,
-      liveTime: lastUpdated === '--' ? 'Awaiting refresh' : `Updated ${lastUpdated}`,
-      dominantRoute: weatherZones?.[0]?.name || currentWeather?.zone_name || 'Singapore Strait',
-    }
-  }, [currentWeather, lastUpdated, metrics.avgRisk, weatherZones])
-
   const mapCenter = useMemo(() => {
     if (currentWeather && Number.isFinite(Number(currentWeather.lat)) && Number.isFinite(Number(currentWeather.lon))) {
       return [Number(currentWeather.lat), Number(currentWeather.lon)]
@@ -372,7 +346,6 @@ function DashboardShell() {
         activePage={activePage}
         hasError={Boolean(error)}
         lastUpdated={lastUpdated}
-        compact={isDashboard}
         theme={theme}
         title={titleFromPage(activePage)}
         subtitle={subtitleFromPage(activePage)}
@@ -383,164 +356,17 @@ function DashboardShell() {
         onToggleTheme={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
         onNavigate={navigateTo}
       >
-        {isDashboard ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-            <motion.section
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3 }}
-              className="dashboard-hero grid gap-3 overflow-hidden rounded-[1.5rem] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.18),transparent_28%),linear-gradient(135deg,rgba(8,12,18,0.92),rgba(10,15,20,0.96))] p-3 shadow-[0_28px_80px_-48px_rgba(8,145,178,0.45)] lg:grid-cols-[1.15fr_0.85fr] lg:p-4"
-            >
-              <div className="flex min-h-0 flex-col justify-between gap-3">
-                <div className="space-y-2">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-cyan-100/75">Live command center</p>
-                  <h2 className="max-w-3xl text-xl font-semibold tracking-tight text-white lg:text-[1.55rem]">
-                    One screen for shipments, vessel pressure, and maritime weather.
-                  </h2>
-                  <p className="max-w-3xl text-[13px] leading-5 text-slate-300">
-                    {operationalInsight}
-                  </p>
-                </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => navigateTo('shipments')}
-                    className="inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1.5 text-[11px] font-medium text-cyan-100 transition hover:bg-cyan-400/15"
-                  >
-                    View Shipments
-                    <FiArrowRight size={12} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigateTo('risk-alerts')}
-                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-slate-200 transition hover:bg-white/10"
-                  >
-                    Open Risk Alerts
-                  </button>
-                  <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2.5 py-1.5 text-[11px] text-slate-300">
-                    <FiClock size={12} />
-                    {dashboardStatus.liveTime}
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid min-h-0 grid-cols-2 gap-2 border-t border-white/10 pt-3 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">System risk</p>
-                  <p className="mt-1 text-xl font-semibold text-white">{metrics.avgRisk}</p>
-                  <p className="mt-1 text-xs text-slate-400">{dashboardStatus.riskLabel}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">High risk</p>
-                  <p className="mt-1 text-xl font-semibold text-white">{metrics.highRisk}</p>
-                  <p className="mt-1 text-xs text-slate-400">Shipments flagged today</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Active vessels</p>
-                  <p className="mt-1 text-xl font-semibold text-white">{metrics.activeVessels}</p>
-                  <p className="mt-1 text-xs text-slate-400">Live AIS feed</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-2.5">
-                  <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Weather</p>
-                  <p className="mt-1 text-xl font-semibold text-white">{dashboardStatus.weatherSeverity}</p>
-                  <p className="mt-1 text-xs text-slate-400">{dashboardStatus.weatherLabel}</p>
-                </div>
-              </div>
-            </motion.section>
-
-            <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-              <MetricCard compact icon={FiBox} title="Total Shipments" value={metrics.totalShipments} trend="Live feed" trendTone="neutral" />
-              <MetricCard compact icon={FiAlertTriangle} title="High Risk" value={metrics.highRisk} trend="Requires action" trendTone="up" />
-              <MetricCard compact icon={FiNavigation} title="Active Vessels" value={metrics.activeVessels} trend="AIS stream" trendTone="neutral" />
-              <MetricCard compact icon={FiTrendingUp} title="Avg. Risk" value={metrics.avgRisk} trend="Command posture" trendTone="down" />
-            </div>
-
-            <section className="grid min-h-0 flex-1 grid-cols-1 gap-3 xl:grid-cols-12">
-              <div className="min-h-0 xl:col-span-8">
-                <MapView
-                  compact
-                  shipments={shipments}
-                  vessels={vessels}
-                  weatherOverlay={weatherOverlay}
-                  weatherZones={weatherZones}
-                  center={mapCenter}
-                  onToggleWeather={() => setWeatherOverlay((prev) => !prev)}
-                  loading={loading}
-                  error={error}
-                />
-              </div>
-
-              <div className="grid min-h-0 gap-3 xl:col-span-4 xl:grid-rows-[auto_auto_1fr]">
-                <RiskChart compact averageRisk={metrics.avgRisk} breakdown={overview?.risk_breakdown || []} />
-
-                <Card className="p-3">
-                  <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2.5">
-                    <div>
-                      <p className="text-sm font-medium text-white">Weather Snapshot</p>
-                      <p className="text-xs text-slate-400">{currentWeather?.zone_name || dashboardStatus.dominantRoute}</p>
-                    </div>
-                    <div className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300">
-                      {dashboardStatus.weatherLabel}
-                    </div>
-                  </div>
-
-                  <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
-                      <div className="flex items-center gap-1 text-slate-400">
-                        <FiWind size={12} />
-                        Wind
-                      </div>
-                      <p className="mt-1.5 text-sm text-white">{Number(currentWeather?.wind_speed ?? currentWeather?.wind_kph ?? 0).toFixed(1)} km/h</p>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
-                      <div className="text-slate-400">Visibility</div>
-                      <p className="mt-1.5 text-sm text-white">{Number(currentWeather?.visibility ?? 0).toFixed(1)} km</p>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
-                      <div className="text-slate-400">Rain</div>
-                      <p className="mt-1.5 text-sm text-white">{Number(currentWeather?.rain ?? 0).toFixed(1)} mm</p>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-white/5 p-2.5">
-                      <div className="text-slate-400">Zones at risk</div>
-                      <p className="mt-1.5 text-sm text-white">{dashboardStatus.routeZones}</p>
-                    </div>
-                  </div>
-                </Card>
-
-                <Card className="p-3">
-                  <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2.5">
-                    <div>
-                      <p className="text-sm font-medium text-white">Top Risk Alerts</p>
-                      <p className="text-xs text-slate-400">Top 3 shipments by disruption risk</p>
-                    </div>
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300">Live</span>
-                  </div>
-
-                  <div className="mt-2.5 space-y-2">
-                    {topRiskAlerts.map((shipment) => (
-                      <div key={shipment.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-1.5">
-                        <div>
-                          <p className="text-sm text-white">{shipment.id}</p>
-                          <p className="text-xs text-slate-400">Risk score {shipment.dri}</p>
-                        </div>
-                        <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${riskColor(shipment.level)}`}>
-                          {shipment.level}
-                        </span>
-                      </div>
-                    ))}
-
-                    {topRiskAlerts.length === 0 && (
-                      <div className="rounded-xl border border-dashed border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-400">
-                        No high-risk alerts available yet.
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              </div>
-            </section>
+        {activePage !== 'analytics' && activePage !== 'weather' && (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <MetricCard icon={FiBox} title="Total Shipments" value={metrics.totalShipments} trend="18% vs yesterday" trendTone="up" />
+            <MetricCard icon={FiAlertTriangle} title="High Risk Shipments" value={metrics.highRisk} trend="33% vs yesterday" trendTone="up" />
+            <MetricCard icon={FiNavigation} title="Active Vessels" value={metrics.activeVessels} trend="Live on map" trendTone="neutral" />
+            <MetricCard icon={FiTrendingUp} title="Avg. Disruption Risk" value={metrics.avgRisk} trend="Medium Risk" trendTone="down" />
           </div>
-        ) : (activePage === 'dashboard' || activePage === 'routes') && (
+        )}
+
+        {(activePage === 'dashboard' || activePage === 'routes') && (
           <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
             <div className="xl:col-span-8">
               <MapView
@@ -564,6 +390,35 @@ function DashboardShell() {
                 lastUpdated={weatherLastUpdated}
               />
 
+              <Card className="p-4">
+                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">Top Risk Alerts</p>
+                    <p className="text-xs text-slate-400">Top 3 shipments by disruption risk</p>
+                  </div>
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300">Live</span>
+                </div>
+
+                <div className="mt-4 space-y-2">
+                  {topRiskAlerts.map((shipment) => (
+                    <div key={shipment.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                      <div>
+                        <p className="text-sm text-white">{shipment.id}</p>
+                        <p className="text-xs text-slate-400">Risk score {shipment.dri}</p>
+                      </div>
+                      <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${riskColor(shipment.level)}`}>
+                        {shipment.level}
+                      </span>
+                    </div>
+                  ))}
+
+                  {topRiskAlerts.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-400">
+                      No high-risk alerts available yet.
+                    </div>
+                  )}
+                </div>
+              </Card>
 
               <Card className="p-4">
                 <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
@@ -633,7 +488,7 @@ function DashboardShell() {
           </div>
         )}
 
-        {(activePage === 'shipments' || activePage === 'risk-alerts') && (
+        {(activePage === 'dashboard' || activePage === 'shipments' || activePage === 'risk-alerts') && (
           <ShipmentsTable
             shipments={activePage === 'risk-alerts' ? highRiskOnly : filteredShipments}
             onSelect={setSelectedShipment}
