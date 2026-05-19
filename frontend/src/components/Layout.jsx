@@ -7,6 +7,7 @@ export default function Layout({
   activePage,
   hasError,
   lastUpdated,
+  compact = false,
   theme,
   title,
   subtitle,
@@ -26,7 +27,7 @@ export default function Layout({
   }
 
   return (
-    <div className="app-shell min-h-screen text-white md:flex">
+    <div className={`app-shell text-white md:flex ${compact ? 'h-[100dvh] overflow-hidden' : 'min-h-screen'}`}>
       <Sidebar
         activePage={activePage}
         hasError={hasError}
@@ -39,8 +40,9 @@ export default function Layout({
 
       <div className="hidden w-64 shrink-0 md:block" aria-hidden="true" />
 
-      <main className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 lg:px-8">
+      <main className={`min-w-0 flex-1 flex flex-col px-4 py-4 md:px-6 lg:px-8 ${compact ? 'h-[100dvh] overflow-hidden' : 'min-h-screen overflow-y-auto'}`}>
         <Topbar
+          compact={compact}
           title={title}
           subtitle={subtitle}
           theme={theme}
@@ -52,7 +54,7 @@ export default function Layout({
           onMenuClick={() => setSidebarOpen(true)}
         />
 
-        <div className="space-y-6 pb-8">
+        <div className={compact ? 'flex min-h-0 flex-1 flex-col gap-3 pb-0' : 'space-y-6 pb-8'}>
           {children}
         </div>
       </main>

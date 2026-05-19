@@ -8,7 +8,7 @@ import { fetchSystemOwnership } from '../services/api'
 
 const MotionDiv = motion.div
 
-export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch, searchValue, onSearchValueChange, onMenuClick, onVoiceSubmit }) {
+export default function Topbar({ title, subtitle, theme, compact = false, onToggleTheme, onSearch, searchValue, onSearchValueChange, onMenuClick, onVoiceSubmit }) {
   const { user } = useUser()
   const [ownership, setOwnership] = useState(null)
   const {
@@ -103,7 +103,7 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
     <MotionDiv
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="topbar-shell sticky top-0 z-10 mb-6 flex flex-wrap items-center justify-between gap-4 px-4 py-4"
+      className={`topbar-shell sticky top-0 z-10 flex flex-wrap items-center justify-between gap-4 ${compact ? 'mb-3 px-3 py-3' : 'mb-6 px-4 py-4'}`}
     >
       <div className="flex items-center gap-3">
         <button
@@ -116,8 +116,8 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
         </button>
 
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-gray-500">{subtitle || 'Live Operations'}</p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white">{title || 'Maritime Logistics Command Center'}</h1>
+          <p className={`${compact ? 'text-[10px] tracking-[0.24em]' : 'text-xs tracking-[0.3em]'} uppercase text-gray-500`}>{subtitle || 'Live Operations'}</p>
+          <h1 className={`mt-1 font-semibold tracking-tight text-white ${compact ? 'text-xl' : 'text-2xl'}`}>{title || 'Maritime Logistics Command Center'}</h1>
         </div>
       </div>
 
@@ -125,13 +125,13 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
         <button
           type="button"
           onClick={onToggleTheme}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white"
+          className={`inline-flex items-center justify-center rounded-full border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white ${compact ? 'h-9 w-9' : 'h-10 w-10'}`}
           aria-label="Toggle color theme"
         >
           {theme === 'dark' ? <FiSun size={14} /> : <FiMoon size={14} />}
         </button>
 
-        <div className="relative min-w-[19rem] max-w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition focus-within:border-cyan-400/30 focus-within:bg-white/5 md:min-w-[22rem]">
+        <div className={`relative max-w-full rounded-2xl border border-white/10 bg-white/5 px-3 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition focus-within:border-cyan-400/30 focus-within:bg-white/5 ${compact ? 'min-w-[14rem] py-2 md:min-w-[17rem]' : 'min-w-[19rem] py-2.5 md:min-w-[22rem]'}`}>
           <FiSearch size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <input
             value={searchValue}
@@ -140,7 +140,7 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
               if (e.key === 'Enter') onSearch(e.currentTarget.value)
             }}
             placeholder="Speak or search shipments..."
-            className="w-full bg-transparent pl-7 pr-14 text-xs text-white placeholder:text-gray-500 outline-none"
+            className={`w-full bg-transparent pl-7 pr-14 text-xs text-white placeholder:text-gray-500 outline-none ${compact ? 'leading-5' : ''}`}
           />
           <button
             type="button"
@@ -160,15 +160,15 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
 
         <button
           type="button"
-          className="relative flex h-10 w-10 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white"
+          className={`relative flex items-center justify-center rounded-lg border border-white/10 bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white ${compact ? 'h-9 w-9' : 'h-10 w-10'}`}
           aria-label="Notifications"
         >
           <FiBell size={15} />
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-orange-400" />
         </button>
 
-        <button type="button" className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-xs font-semibold text-white">
+        <button type="button" className={`flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 text-left transition hover:bg-white/10 ${compact ? 'px-2.5 py-1.5' : 'px-3 py-2'}`}>
+          <span className={`flex items-center justify-center rounded-full border border-white/10 bg-white/10 text-xs font-semibold text-white ${compact ? 'h-7 w-7' : 'h-8 w-8'}`}>
             {avatarText}
           </span>
           <span className="hidden md:block">
@@ -178,7 +178,7 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
         </button>
 
         {error && (
-          <div className="w-full text-right text-[11px] text-orange-200 md:-mt-2 md:pr-1">
+          <div className={`w-full text-right text-[11px] text-orange-200 md:pr-1 ${compact ? 'md:-mt-1' : 'md:-mt-2'}`}>
             {error}
           </div>
         )}

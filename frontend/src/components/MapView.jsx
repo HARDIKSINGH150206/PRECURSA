@@ -23,12 +23,14 @@ function vesselTrail(vessel) {
   return Array.isArray(vessel?.trail) ? vessel.trail.filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon))) : []
 }
 
-export default function MapView({ shipments, vessels, weatherOverlay, weatherZones = [], center, onToggleWeather, loading, error }) {
+export default function MapView({ shipments, vessels, weatherOverlay, weatherZones = [], center, onToggleWeather, loading, error, compact = false }) {
   const hasCenter = Array.isArray(center) && center.length === 2 && center.every((value) => Number.isFinite(Number(value)))
+  const shellClass = compact ? 'relative flex h-full min-h-0 flex-col overflow-hidden' : 'relative flex h-full min-h-[620px] flex-col overflow-hidden'
+  const mapClass = compact ? 'h-full min-h-0 w-full' : 'h-full w-full'
 
   if (!hasCenter) {
     return (
-      <Card className="relative flex h-full min-h-[620px] flex-col overflow-hidden">
+      <Card className={shellClass}>
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
           <div className="flex items-center gap-2 text-gray-300">
             <FiLayers size={15} />
@@ -58,7 +60,7 @@ export default function MapView({ shipments, vessels, weatherOverlay, weatherZon
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className="relative flex h-full flex-col overflow-hidden"
+      className={shellClass}
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-2 text-gray-300">
@@ -76,8 +78,8 @@ export default function MapView({ shipments, vessels, weatherOverlay, weatherZon
         </button>
       </div>
 
-      <div className="relative min-h-[620px] flex-1">
-        <MapContainer center={center} zoom={5} className="h-full w-full" worldCopyJump>
+      <div className="relative min-h-0 flex-1">
+        <MapContainer center={center} zoom={5} className={mapClass} worldCopyJump>
           <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
 
           {weatherOverlay &&
