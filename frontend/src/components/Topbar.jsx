@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
-import { useUser } from '@clerk/clerk-react'
-import { FiBell, FiMic, FiMicOff, FiMenu, FiMoon, FiSearch, FiSun } from 'react-icons/fi'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useClerk, useUser } from '@clerk/clerk-react'
+import { FiBell, FiChevronDown, FiLogOut, FiMic, FiMicOff, FiMenu, FiMoon, FiSearch, FiSun } from 'react-icons/fi'
 
 import useSpeechRecognition from '../hooks/useSpeechRecognition'
 import { fetchSystemOwnership } from '../services/api'
@@ -9,8 +9,11 @@ import { fetchSystemOwnership } from '../services/api'
 const MotionDiv = motion.div
 
 export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch, searchValue, onSearchValueChange, onMenuClick, onVoiceSubmit }) {
+  const { signOut } = useClerk()
   const { user } = useUser()
   const [ownership, setOwnership] = useState(null)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const accountMenuRef = useRef(null)
   const {
     isSupported,
     isListening,
@@ -53,6 +56,18 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
     return () => {
       active = false
     }
+  }, [])
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!accountMenuRef.current) return
+      if (!accountMenuRef.current.contains(event.target)) {
+        setAccountMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    return () => window.removeEventListener('pointerdown', handlePointerDown)
   }, [])
 
   const handleMicClick = () => {
@@ -98,6 +113,17 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join('') || 'U'
+
+  const accountMenuLabel = useMemo(() => {
+    if (isOwner) return 'Owner'
+    if (isAdmin) return 'Admin'
+    return user ? 'Member' : 'Guest'
+  }, [isAdmin, isOwner, user])
+
+  const handleLogout = async () => {
+    setAccountMenuOpen(false)
+    await signOut()
+  }
 
   return (
     <MotionDiv
@@ -167,15 +193,41 @@ export default function Topbar({ title, subtitle, theme, onToggleTheme, onSearch
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-orange-400" />
         </button>
 
-        <button type="button" className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-xs font-semibold text-white">
-            {avatarText}
-          </span>
-          <span className="hidden md:block">
-            <span className="block text-xs text-white">{displayName}</span>
-            <span className="block text-[11px] text-gray-500">{userRole}</span>
-          </span>
-        </button>
+        <div className="relative" ref={accountMenuRef}>
+          <button
+            type="button"
+            onClick={() => setAccountMenuOpen((current) => !current)}
+            className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:bg-white/10"
+            aria-haspopup="menu"
+            aria-expanded={accountMenuOpen}
+          >
+            <span className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-xs font-semibold text-white">
+              {avatarText}
+            </span>
+            <span className="hidden md:block">
+              <span className="block text-xs text-white">{displayName}</span>
+              <span className="block text-[11px] text-gray-500">{userRole}</span>
+            </span>
+            <FiChevronDown size={14} className="hidden text-gray-400 md:block" />
+          </button>
+
+          {accountMenuOpen && (
+            <div className="absolute right-0 top-full z-20 mt-2 w-44 rounded-2xl border border-white/10 bg-slate-950/95 p-2 shadow-[0_18px_40px_rgba(0,0,0,0.4)] backdrop-blur-md">
+              <div className="px-3 py-2">
+                <p className="text-xs text-white">{displayName}</p>
+                <p className="text-[11px] text-gray-500">{accountMenuLabel}</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-gray-200 transition hover:bg-red-500/10 hover:text-white"
+              >
+                <FiLogOut size={14} />
+                <span>Logout</span>
+              </button>
+            </div>
+          )}
+        </div>
 
         {error && (
           <div className="w-full text-right text-[11px] text-orange-200 md:-mt-2 md:pr-1">
