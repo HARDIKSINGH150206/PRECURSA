@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FiChevronLeft, FiChevronRight } from 'react-icons/fi'
 
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
@@ -15,6 +16,8 @@ export default function Layout({
   onSearchValueChange,
   onVoiceSubmit,
   onToggleTheme,
+  onToggleSidebar,
+  sidebarCollapsed = false,
   onNavigate,
   children
 }) {
@@ -27,17 +30,19 @@ export default function Layout({
 
   return (
     <div className="app-shell min-h-screen text-white md:flex">
-      <Sidebar
-        activePage={activePage}
-        hasError={hasError}
-        lastUpdated={lastUpdated}
-        theme={theme}
-        isOpen={sidebarOpen}
-        onNavigate={handleNavigate}
-        onClose={() => setSidebarOpen(false)}
-      />
+      {(!sidebarCollapsed || sidebarOpen) && (
+        <Sidebar
+          activePage={activePage}
+          hasError={hasError}
+          lastUpdated={lastUpdated}
+          theme={theme}
+          isOpen={sidebarOpen}
+          onNavigate={handleNavigate}
+          onClose={() => setSidebarOpen(false)}
+        />
+      )}
 
-      <div className="hidden w-64 shrink-0 md:block" aria-hidden="true" />
+      {!sidebarCollapsed && <div className="hidden w-64 shrink-0 md:block" aria-hidden="true" />}
 
       <main className="min-h-screen min-w-0 flex-1 overflow-y-auto px-4 py-4 md:px-6 lg:px-8">
         <Topbar
@@ -51,6 +56,17 @@ export default function Layout({
           onToggleTheme={onToggleTheme}
           onMenuClick={() => setSidebarOpen(true)}
         />
+
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          aria-label={sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+          className={`hidden md:flex fixed top-1/2 z-40 -translate-y-1/2 items-center justify-center rounded-r-full border border-white/10 bg-white/10 px-2 py-4 text-white shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur-md transition hover:bg-white/20 ${
+            sidebarCollapsed ? 'left-0' : 'left-64'
+          }`}
+        >
+          {sidebarCollapsed ? <FiChevronRight size={16} /> : <FiChevronLeft size={16} />}
+        </button>
 
         <div className="space-y-6 pb-8">
           {children}

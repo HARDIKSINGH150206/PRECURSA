@@ -85,6 +85,10 @@ function DashboardShell() {
   const [lastUpdated, setLastUpdated] = useState('--')
   const [activePage, setActivePage] = useState(parsePageFromHash)
   const [shipmentQuery, setShipmentQuery] = useState('')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('precursa-sidebar-collapsed') === 'true'
+  })
 
   useEffect(() => {
     if (!isLoaded || !authLoaded) return
@@ -104,6 +108,10 @@ function DashboardShell() {
     document.documentElement.dataset.theme = theme
     window.localStorage.setItem('precursa-theme', theme)
   }, [theme])
+
+  useEffect(() => {
+    window.localStorage.setItem('precursa-sidebar-collapsed', String(sidebarCollapsed))
+  }, [sidebarCollapsed])
 
   const loadData = useCallback(async () => {
     try {
@@ -354,6 +362,8 @@ function DashboardShell() {
         onSearchValueChange={setShipmentQuery}
         onVoiceSubmit={handleVoiceSearch}
         onToggleTheme={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((current) => !current)}
         onNavigate={navigateTo}
       >
 
