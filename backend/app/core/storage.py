@@ -303,10 +303,11 @@ def _seed_postgres_data(connection: psycopg.Connection[Any]) -> None:
     port_count = connection.execute("SELECT COUNT(*) AS count FROM ports").fetchone()["count"]
     if port_count == 0:
         ports = _seed_ports()
-        connection.executemany(
-            "INSERT INTO ports (name, country, lat, lon) VALUES (%(name)s, %(country)s, %(lat)s, %(lon)s)",
-            ports,
-        )
+        for port in ports:
+            connection.execute(
+                "INSERT INTO ports (name, country, lat, lon) VALUES (%(name)s, %(country)s, %(lat)s, %(lon)s)",
+                port,
+            )
 
     shipment_count = connection.execute("SELECT COUNT(*) AS count FROM shipments").fetchone()["count"]
     if shipment_count == 0:
@@ -329,18 +330,19 @@ def _seed_postgres_data(connection: psycopg.Connection[Any]) -> None:
                     "cargo": item["cargo"],
                 }
             )
-        connection.executemany(
-            """
-            INSERT INTO shipments (
-                id, origin_port_id, destination_port_id, origin, destination, current_location, lat, lon, cargo
-            )
-            VALUES (
-                %(id)s, %(origin_port_id)s, %(destination_port_id)s, %(origin)s, %(destination)s,
-                %(current_location)s, %(lat)s, %(lon)s, %(cargo)s
-            )
+        for shipment in shipments:
+            connection.execute(
+                """
+                INSERT INTO shipments (
+                    id, origin_port_id, destination_port_id, origin, destination, current_location, lat, lon, cargo
+                )
+                VALUES (
+                    %(id)s, %(origin_port_id)s, %(destination_port_id)s, %(origin)s, %(destination)s,
+                    %(current_location)s, %(lat)s, %(lon)s, %(cargo)s
+                )
             """,
-            shipments,
-        )
+                shipment,
+            )
 
 
 def _parse_json_value(value: Any) -> Any:
