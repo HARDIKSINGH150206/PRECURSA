@@ -18,7 +18,7 @@ import Settings from './pages/Settings'
 import WeatherIntelligence from './pages/WeatherIntelligence'
 import Analytics from './pages/Analytics'
 import Login from './pages/Login'
-import { explainShipmentRisk, fetchDashboardOverview, fetchShipments, fetchVessels, setApiAuthContext } from './services/api'
+import { explainShipmentRisk, fetchAlternativeRoutes, fetchDashboardOverview, fetchShipments, fetchVessels, setApiAuthContext } from './services/api'
 import Signup from './pages/Signup'
 import { riskColor, riskLevelFromDRI } from './utils/risk'
 import './App.css'
@@ -89,6 +89,9 @@ function DashboardShell() {
   const [lastUpdated, setLastUpdated] = useState('--')
   const [activePage, setActivePage] = useState(parsePageFromHash)
   const [shipmentQuery, setShipmentQuery] = useState('')
+  const [routeAlternatives, setRouteAlternatives] = useState([])
+  const [routeLoading, setRouteLoading] = useState(false)
+  const [routeError, setRouteError] = useState('')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem('precursa-sidebar-collapsed') === 'true'
@@ -281,6 +284,18 @@ function DashboardShell() {
     [sortedShipments]
   )
 
+  const routeFocusShipment = useMemo(() => {
+    if (activePage !== 'routes') {
+      return selectedShipment
+    }
+
+    if (selectedShipment && shipments.some((item) => item.id === selectedShipment.id)) {
+      return selectedShipment
+    }
+
+    return highRiskOnly[0] || shipments[0] || null
+  }, [activePage, highRiskOnly, selectedShipment, shipments])
+
   const vesselRows = useMemo(
     () => vessels.map((vessel, index) => ({
       index: index + 1,
@@ -300,7 +315,42 @@ function DashboardShell() {
     dominantFactor,
     loading: weatherLoading,
     lastUpdated: weatherLastUpdated,
-  } = useLiveWeather(selectedShipment?.route_coords || [])
+  } = useLiveWeather(routeFocusShipment?.route_coords || [])
+
+  useEffect(() => {
+    if (activePage !== 'routes' || !routeFocusShipment?.id) {
+      return
+    }
+
+    let cancelled = false
+
+    const loadRouteAlternatives = async () => {
+      setRouteLoading(true)
+      setRouteError('')
+
+      try {
+        const data = await fetchAlternativeRoutes(routeFocusShipment.id)
+        if (!cancelled) {
+          setRouteAlternatives(Array.isArray(data?.alternative_routes) ? data.alternative_routes : [])
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setRouteError(err?.response?.data?.detail || err?.message || 'Unable to load route alternatives.')
+          setRouteAlternatives([])
+        }
+      } finally {
+        if (!cancelled) {
+          setRouteLoading(false)
+        }
+      }
+    }
+
+    void loadRouteAlternatives()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activePage, routeFocusShipment?.id])
 
   const mapCenter = useMemo(() => {
     if (currentWeather && Number.isFinite(Number(currentWeather.lat)) && Number.isFinite(Number(currentWeather.lon))) {
@@ -357,6 +407,31 @@ function DashboardShell() {
     return `Live refresh at ${lastUpdated}`
   }, [lastUpdated])
 
+  const routeCandidates = useMemo(() => {
+    const seeded = highRiskOnly.length > 0 ? highRiskOnly : sortedShipments
+    return seeded.slice(0, 5)
+  }, [highRiskOnly, sortedShipments])
+
+  const routeSummary = useMemo(() => {
+    if (!routeFocusShipment) {
+      return null
+    }
+
+    return {
+      id: routeFocusShipment.id,
+      origin: routeFocusShipment.origin,
+      destination: routeFocusShipment.destination,
+      dri: Number(routeFocusShipment.dri || 0),
+      level: riskLevelFromDRI(Number(routeFocusShipment.dri || 0)),
+      weatherRisk: Number(routeFocusShipment.weather_risk || 0),
+      routeCoords: Array.isArray(routeFocusShipment.route_coords) ? routeFocusShipment.route_coords : [],
+    }
+  }, [routeFocusShipment])
+
+  const visibleRouteAlternatives = activePage === 'routes' ? routeAlternatives : []
+  const visibleRouteLoading = activePage === 'routes' && routeLoading
+  const visibleRouteError = activePage === 'routes' ? routeError : ''
+
   return (
     <>
       <Layout
@@ -396,6 +471,7 @@ function DashboardShell() {
                 weatherOverlay={weatherOverlay}
                 weatherZones={weatherZones}
                 center={mapCenter}
+                alternativeRoutes={activePage === 'routes' ? routeAlternatives : []}
                 onToggleWeather={() => setWeatherOverlay((prev) => !prev)}
                 loading={loading}
                 error={error}
@@ -411,48 +487,163 @@ function DashboardShell() {
                 lastUpdated={weatherLastUpdated}
               />
 
-              <Card className="p-4">
-                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-                  <div>
-                    <p className="text-sm font-medium text-white">Top Risk Alerts</p>
-                    <p className="text-xs text-slate-400">Top 3 shipments by disruption risk</p>
+              {activePage === 'routes' ? (
+                <Card className="p-4">
+                  <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                    <div>
+                      <p className="text-sm font-medium text-white">Route Planner</p>
+                      <p className="text-xs text-slate-400">Pick a shipment to compare alternatives and record a reroute decision.</p>
+                    </div>
+                    <span className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-cyan-100">Planning</span>
                   </div>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300">Live</span>
-                </div>
 
-                <div className="mt-4 space-y-2">
-                  {topRiskAlerts.map((shipment) => (
-                    <div key={shipment.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                      <div>
-                        <p className="text-sm text-white">{shipment.id}</p>
-                        <p className="text-xs text-slate-400">Risk score {shipment.dri}</p>
+                  <div className="mt-4 space-y-3">
+                    {routeCandidates.map((shipment) => {
+                      const level = riskLevelFromDRI(Number(shipment.dri || 0))
+                      const active = routeSummary?.id === shipment.id
+
+                      return (
+                        <button
+                          key={shipment.id}
+                          type="button"
+                          onClick={() => setSelectedShipment(shipment)}
+                          className={`w-full rounded-xl border px-3 py-2 text-left transition ${
+                            active
+                              ? 'border-cyan-400/40 bg-cyan-400/12'
+                              : 'border-white/10 bg-white/5 hover:border-white/20 hover:bg-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm text-white">{shipment.id}</p>
+                              <p className="text-xs text-slate-400">{shipment.origin} → {shipment.destination}</p>
+                            </div>
+                            <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${riskColor(level)}`}>
+                              {level}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+
+                    {routeCandidates.length === 0 && (
+                      <div className="rounded-xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-400">
+                        No shipments available for route planning yet.
                       </div>
-                      <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${riskColor(shipment.level)}`}>
-                        {shipment.level}
-                      </span>
-                    </div>
-                  ))}
-
-                  {topRiskAlerts.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-400">
-                      No high-risk alerts available yet.
-                    </div>
-                  )}
-                </div>
-              </Card>
-
-              <Card className="p-4">
-                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-                  <div>
-                    <p className="text-sm font-medium text-white">Operational Insight</p>
-                    <p className="text-xs text-slate-400">Auto-generated from live weather and AIS conditions · {insightRefreshLabel}</p>
+                    )}
                   </div>
-                </div>
 
-                <p className="mt-4 text-sm leading-6 text-slate-200">
-                  {operationalInsight}
-                </p>
-              </Card>
+                  <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/50 p-4">
+                    {routeSummary ? (
+                      <>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Selected lane</p>
+                            <p className="mt-1 text-sm font-medium text-white">{routeSummary.origin} → {routeSummary.destination}</p>
+                          </div>
+                          <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${riskColor(routeSummary.level)}`}>
+                            {routeSummary.level} DRI {routeSummary.dri}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Alternative routes</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">{visibleRouteLoading ? '…' : visibleRouteAlternatives.length}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                            <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Weather risk</p>
+                            <p className="mt-2 text-2xl font-semibold text-white">{routeSummary.weatherRisk}</p>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 space-y-2">
+                          {visibleRouteLoading && (
+                            <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-400">
+                              Loading route alternatives...
+                            </div>
+                          )}
+
+                          {visibleRouteError && (
+                            <div className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-4 text-sm text-red-200">
+                              {visibleRouteError}
+                            </div>
+                          )}
+
+                          {!visibleRouteLoading && !visibleRouteError && visibleRouteAlternatives.length === 0 && (
+                            <div className="rounded-xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-400">
+                              No alternative routes are available for this lane right now.
+                            </div>
+                          )}
+
+                          {!visibleRouteLoading && visibleRouteAlternatives.map((route, index) => (
+                            <div key={`${routeSummary.id}-alt-${index}`} className="rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-sm text-slate-300">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="font-medium text-white">
+                                  {route.origin} → {route.intermediate_port || 'Direct'} → {route.destination}
+                                </p>
+                                <span className="text-xs uppercase tracking-[0.18em] text-emerald-300">
+                                  {route.distance_saved_percent}% saved
+                                </span>
+                              </div>
+                              <p className="mt-2 text-xs text-slate-400">
+                                {route.distance_km} km total · ${route.estimated_cost_change} cost impact · {route.estimated_days_saved} days
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-slate-400">Select a shipment to inspect route alternatives.</p>
+                    )}
+                  </div>
+                </Card>
+              ) : (
+                <>
+                  <Card className="p-4">
+                    <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">Top Risk Alerts</p>
+                        <p className="text-xs text-slate-400">Top 3 shipments by disruption risk</p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-300">Live</span>
+                    </div>
+
+                    <div className="mt-4 space-y-2">
+                      {topRiskAlerts.map((shipment) => (
+                        <div key={shipment.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                          <div>
+                            <p className="text-sm text-white">{shipment.id}</p>
+                            <p className="text-xs text-slate-400">Risk score {shipment.dri}</p>
+                          </div>
+                          <span className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] ${riskColor(shipment.level)}`}>
+                            {shipment.level}
+                          </span>
+                        </div>
+                      ))}
+
+                      {topRiskAlerts.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-white/10 bg-white/5 px-3 py-4 text-sm text-slate-400">
+                          No high-risk alerts available yet.
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card className="p-4">
+                    <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+                      <div>
+                        <p className="text-sm font-medium text-white">Operational Insight</p>
+                        <p className="text-xs text-slate-400">Auto-generated from live weather and AIS conditions · {insightRefreshLabel}</p>
+                      </div>
+                    </div>
+
+                    <p className="mt-4 text-sm leading-6 text-slate-200">
+                      {operationalInsight}
+                    </p>
+                  </Card>
+                </>
+              )}
             </div>
           </section>
         )}

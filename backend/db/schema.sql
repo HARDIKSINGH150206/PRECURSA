@@ -60,7 +60,25 @@ CREATE TABLE IF NOT EXISTS app_settings (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS shipment_reroutes (
+    id BIGSERIAL PRIMARY KEY,
+    shipment_id TEXT NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
+    original_origin TEXT NOT NULL,
+    original_destination TEXT NOT NULL,
+    intermediate_port TEXT,
+    route_index INTEGER NOT NULL DEFAULT 0,
+    distance_saved_percent DOUBLE PRECISION DEFAULT 0,
+    estimated_cost_change DOUBLE PRECISION DEFAULT 0,
+    estimated_days_saved DOUBLE PRECISION DEFAULT 0,
+    decision_status TEXT NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    executed_at TIMESTAMPTZ,
+    execution_notes TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_shipments_origin_port_id ON shipments(origin_port_id);
 CREATE INDEX IF NOT EXISTS idx_shipments_destination_port_id ON shipments(destination_port_id);
 CREATE INDEX IF NOT EXISTS idx_weather_snapshots_port_id ON weather_snapshots(port_id);
 CREATE INDEX IF NOT EXISTS idx_weather_snapshots_shipment_id ON weather_snapshots(shipment_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_reroutes_shipment_id ON shipment_reroutes(shipment_id);
+CREATE INDEX IF NOT EXISTS idx_shipment_reroutes_status ON shipment_reroutes(decision_status);

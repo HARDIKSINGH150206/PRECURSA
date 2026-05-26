@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: precursa-backend
+    env: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    
+    envVars:
+      - key: FRONTEND_ORIGIN
+        value: https://precursa.vercel.app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: precursa-db
+          property: connectionString
+      - key: STRUCTURED_LOGS
+        value: "true"
+      - key: PYTHON_VERSION
+        value: 3.13
+    
+  - type: pserv
+    name: precursa-db
+    ipWhitelist: []
+    plan: free

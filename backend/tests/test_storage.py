@@ -110,3 +110,49 @@ def test_vessel_and_weather_snapshots_persist(monkeypatch, tmp_path):
     assert weather_rows
     assert weather_rows[0]["zone_name"] == "Singapore Strait"
     assert weather_rows[0]["severity"] == 41
+
+
+def test_latest_executed_reroute_persists_and_is_readable(monkeypatch, tmp_path):
+    storage = _storage_module()
+    ports_seed, shipments_seed = _seed_paths()
+
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "precursa.sqlite3")
+    monkeypatch.setattr(storage, "SEED_PORTS_PATH", ports_seed)
+    monkeypatch.setattr(storage, "SEED_SHIPMENTS_PATH", shipments_seed)
+    monkeypatch.setattr(storage, "_INITIALIZED", False)
+
+    storage.initialize_storage()
+
+    with storage._connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO shipment_reroutes (
+                shipment_id, original_origin, original_destination, intermediate_port,
+                route_index, distance_saved_percent, estimated_cost_change, estimated_days_saved,
+                decision_status, execution_notes, executed_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "SHP-001",
+                "Mumbai",
+                "Rotterdam",
+                "Hamburg",
+                0,
+                -0.99,
+                3.41,
+                -0.1,
+                "executed",
+                "persisted test",
+                "2026-05-18T00:00:00+00:00",
+            ),
+        )
+        connection.commit()
+
+    reroute = storage.get_latest_executed_reroute("SHP-001")
+
+    assert reroute is not None
+    assert reroute["shipment_id"] == "SHP-001"
+    assert reroute["decision_status"] == "executed"
+    assert reroute["intermediate_port"] == "Hamburg"

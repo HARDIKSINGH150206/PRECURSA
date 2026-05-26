@@ -10,12 +10,15 @@ const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 console.log('[auth] Clerk publishable key found:', Boolean(clerkPublishableKey))
 
 if (typeof document !== 'undefined') {
-  document.documentElement.dataset.surface = 'ultra-dark'
+  const storedSurfaceTheme = typeof window !== 'undefined'
+    ? window.localStorage.getItem('precursa-surface-theme') || 'ultra-dark'
+    : 'ultra-dark'
+  document.documentElement.dataset.surface = storedSurfaceTheme
 }
 
 if (typeof window !== 'undefined') {
   const storedSurfaceTheme = window.localStorage.getItem('precursa-surface-theme')
-  if (storedSurfaceTheme !== 'ultra-dark') {
+  if (!storedSurfaceTheme) {
     window.localStorage.setItem('precursa-surface-theme', 'ultra-dark')
   }
 }

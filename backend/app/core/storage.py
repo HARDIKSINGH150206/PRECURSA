@@ -77,6 +77,15 @@ def _seed_shipments() -> list[dict[str, Any]]:
     return enriched
 
 
+def _postgres_executemany(
+    connection: psycopg.Connection[Any],
+    query: str,
+    params: list[dict[str, Any]] | list[tuple[Any, ...]],
+) -> None:
+    with connection.cursor() as cursor:
+        cursor.executemany(query, params)
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -174,6 +183,22 @@ def _initialize_sqlite_schema(connection: sqlite3.Connection) -> None:
             settings_json TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS shipment_reroutes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            shipment_id TEXT NOT NULL,
+            original_origin TEXT NOT NULL,
+            original_destination TEXT NOT NULL,
+            intermediate_port TEXT,
+            route_index INTEGER NOT NULL DEFAULT 0,
+            distance_saved_percent REAL DEFAULT 0,
+            estimated_cost_change REAL DEFAULT 0,
+            estimated_days_saved REAL DEFAULT 0,
+            decision_status TEXT NOT NULL DEFAULT 'pending',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            executed_at TEXT,
+            execution_notes TEXT
+        );
         """
     )
 
@@ -261,6 +286,31 @@ def _initialize_postgres_schema(connection: psycopg.Connection[Any]) -> None:
         )
         """
     )
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS shipment_reroutes (
+            id BIGSERIAL PRIMARY KEY,
+            shipment_id TEXT NOT NULL REFERENCES shipments(id) ON DELETE CASCADE,
+            original_origin TEXT NOT NULL,
+            original_destination TEXT NOT NULL,
+            intermediate_port TEXT,
+            route_index INTEGER NOT NULL DEFAULT 0,
+            distance_saved_percent DOUBLE PRECISION DEFAULT 0,
+            estimated_cost_change DOUBLE PRECISION DEFAULT 0,
+            estimated_days_saved DOUBLE PRECISION DEFAULT 0,
+            decision_status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            executed_at TIMESTAMPTZ,
+            execution_notes TEXT
+        )
+        """
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_shipment_reroutes_shipment_id ON shipment_reroutes(shipment_id)"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS idx_shipment_reroutes_status ON shipment_reroutes(decision_status)"
+    )
 
 
 def _seed_sqlite_data(connection: sqlite3.Connection) -> None:
@@ -303,11 +353,11 @@ def _seed_postgres_data(connection: psycopg.Connection[Any]) -> None:
     port_count = connection.execute("SELECT COUNT(*) AS count FROM ports").fetchone()["count"]
     if port_count == 0:
         ports = _seed_ports()
-        for port in ports:
-            connection.execute(
-                "INSERT INTO ports (name, country, lat, lon) VALUES (%(name)s, %(country)s, %(lat)s, %(lon)s)",
-                port,
-            )
+        _postgres_executemany(
+            connection,
+            "INSERT INTO ports (name, country, lat, lon) VALUES (%(name)s, %(country)s, %(lat)s, %(lon)s)",
+            ports,
+        )
 
     shipment_count = connection.execute("SELECT COUNT(*) AS count FROM shipments").fetchone()["count"]
     if shipment_count == 0:
@@ -378,7 +428,8 @@ def upsert_vessels_snapshot(vessels: List[Dict[str, Any]]) -> None:
     with _connect() as connection:
         if _use_postgres():
             payloads = [_prepare_vessel_payload(vessel) for vessel in vessels]
-            connection.executemany(
+            _postgres_executemany(
+                connection,
                 """
                 INSERT INTO vessels (mmsi, name, current_speed, lat, lon, trail_json, last_seen_at)
                 VALUES (%(mmsi)s, %(name)s, %(current_speed)s, %(lat)s, %(lon)s, %(trail_json)s::jsonb, %(last_seen_at)s)
@@ -603,6 +654,40 @@ def list_shipments() -> List[Dict[str, Any]]:
             "SELECT id, origin, destination, current_location, lat, lon, cargo FROM shipments ORDER BY id ASC"
         ).fetchall()
         return [dict(row) for row in rows]
+
+
+def get_latest_executed_reroute(shipment_id: str) -> Dict[str, Any] | None:
+    initialize_storage()
+
+    with _connect() as connection:
+        if _use_postgres():
+            row = connection.execute(
+                """
+                SELECT id, shipment_id, original_origin, original_destination, intermediate_port,
+                       route_index, distance_saved_percent, estimated_cost_change, estimated_days_saved,
+                       decision_status, created_at, executed_at, execution_notes
+                FROM shipment_reroutes
+                WHERE shipment_id = %s AND decision_status = 'executed'
+                ORDER BY executed_at DESC NULLS LAST, created_at DESC
+                LIMIT 1
+                """,
+                (shipment_id,),
+            ).fetchone()
+        else:
+            row = connection.execute(
+                """
+                SELECT id, shipment_id, original_origin, original_destination, intermediate_port,
+                       route_index, distance_saved_percent, estimated_cost_change, estimated_days_saved,
+                       decision_status, created_at, executed_at, execution_notes
+                FROM shipment_reroutes
+                WHERE shipment_id = ? AND decision_status = 'executed'
+                ORDER BY CASE WHEN executed_at IS NULL THEN 1 ELSE 0 END, executed_at DESC, created_at DESC
+                LIMIT 1
+                """,
+                (shipment_id,),
+            ).fetchone()
+
+    return dict(row) if row is not None else None
 
 
 def list_ports() -> List[Dict[str, Any]]:

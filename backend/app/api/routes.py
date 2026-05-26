@@ -7,15 +7,23 @@ import time
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.schemas.shipment_schema import ApiResponse, DashboardOverview, ExplainRequest, ExplainRiskResponse, ShipmentOut
+from app.schemas.reroute_schema import AvailableRoutesResponse, RerouteExecutionRequest, RerouteHistoryResponse, RouteOption, RerouteHistory
 from app.schemas.settings_schema import OperatorSettings
 from app.core.identity import SystemPrincipal, SystemRole, ownership_status
-from app.core.storage import get_settings_payload, list_shipments, save_settings_payload
+from app.core.storage import (
+    get_latest_executed_reroute,
+    get_settings_payload,
+    list_shipments,
+    save_settings_payload,
+    _connect,
+    _use_postgres,
+)
 from app.core.startup import observability_snapshot
 from app.api.deps import get_system_principal
 from app.services.ais_service import get_vessels_snapshot
 from app.services.global_risk_service import build_global_risk_intelligence
 from app.services.dri_service import calculate_dri
-from app.services.reroute_service import get_best_route
+from app.services.reroute_service import get_best_route, get_alternative_routes, _haversine_distance
 from app.services.explain_service import explain_risk
 from app.core.config import settings
 from app.services.weather_service import get_primary_zone, get_weather, get_weather_zones
@@ -77,6 +85,16 @@ def _build_shipments() -> List[ShipmentOut]:
     for raw in list_shipments():
         dri_data = calculate_dri(raw)
         weather = dri_data["weather"]
+        latest_reroute = get_latest_executed_reroute(raw["id"])
+        route_coords = get_best_route(raw["origin"], raw["destination"])
+        rerouted = False
+
+        if latest_reroute:
+            route_index = int(latest_reroute.get("route_index", 0))
+            alternative_routes = get_alternative_routes(raw["origin"], raw["destination"], count=max(2, route_index + 1))
+            if 0 <= route_index < len(alternative_routes):
+                route_coords = alternative_routes[route_index]["route_coords"]
+                rerouted = True
 
         enriched: Dict[str, object] = {
             **raw,
@@ -92,8 +110,8 @@ def _build_shipments() -> List[ShipmentOut]:
             "factors": dri_data["factors"],
             "weather_risk": int(weather["risk"]),
             "weather": weather,
-            "route_coords": get_best_route(raw["origin"], raw["destination"]),
-            "rerouted": int(dri_data["dri"]) >= 75,
+            "route_coords": route_coords,
+            "rerouted": rerouted,
         }
         shipments.append(ShipmentOut(**enriched))
 
@@ -259,7 +277,174 @@ def explain_risk_endpoint(payload: ExplainRequest) -> ApiResponse:
     return ApiResponse(data=ExplainRiskResponse(**analysis).model_dump())
 
 
+
 @router.post("/explain", response_model=ApiResponse)
 def explain(payload: ExplainRequest) -> ApiResponse:
     analysis = explain_risk(payload.model_dump())
     return ApiResponse(data=ExplainRiskResponse(**analysis).model_dump())
+
+
+@router.get("/shipments/{shipment_id}/routes", response_model=ApiResponse)
+def get_shipment_routes(shipment_id: str) -> ApiResponse:
+    """Get available alternative routes for a shipment."""
+    shipments = _build_shipments()
+    shipment = next((s for s in shipments if s.id == shipment_id), None)
+    
+    if not shipment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Shipment {shipment_id} not found"
+        )
+    
+    current_route = shipment.route_coords
+    current_distance = 0
+    if len(current_route) >= 2:
+        current_distance = _haversine_distance(
+            current_route[0][0], current_route[0][1],
+            current_route[-1][0], current_route[-1][1]
+        )
+    
+    alternative_routes = get_alternative_routes(shipment.origin, shipment.destination, count=2)
+    
+    response = AvailableRoutesResponse(
+        shipment_id=shipment_id,
+        current_route=current_route,
+        current_distance_km=round(current_distance, 2),
+        alternative_routes=[RouteOption(**route) for route in alternative_routes]
+    )
+    
+    return ApiResponse(data=response.model_dump())
+
+
+@router.post("/shipments/{shipment_id}/reroute", response_model=ApiResponse)
+def execute_reroute(shipment_id: str, payload: RerouteExecutionRequest) -> ApiResponse:
+    """Execute a reroute decision for a shipment."""
+    shipments = _build_shipments()
+    shipment = next((s for s in shipments if s.id == shipment_id), None)
+    
+    if not shipment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Shipment {shipment_id} not found"
+        )
+    
+    alternative_routes = get_alternative_routes(shipment.origin, shipment.destination, count=2)
+    
+    if payload.route_index >= len(alternative_routes):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Route index {payload.route_index} is out of range"
+        )
+    
+    selected_route = alternative_routes[payload.route_index]
+    
+    # Save reroute decision to database
+    with _connect() as connection:
+        if _use_postgres():
+            connection.execute(
+                """
+                INSERT INTO shipment_reroutes 
+                (shipment_id, original_origin, original_destination, intermediate_port, 
+                 route_index, distance_saved_percent, estimated_cost_change, estimated_days_saved, 
+                 decision_status, execution_notes, executed_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    shipment_id,
+                    shipment.origin,
+                    shipment.destination,
+                    selected_route.get("intermediate_port"),
+                    payload.route_index,
+                    selected_route.get("distance_saved_percent", 0),
+                    selected_route.get("estimated_cost_change", 0),
+                    selected_route.get("estimated_days_saved", 0),
+                    "executed",
+                    payload.execution_notes or "",
+                    datetime.now(timezone.utc)
+                )
+            )
+        else:
+            connection.execute(
+                """
+                INSERT INTO shipment_reroutes 
+                (shipment_id, original_origin, original_destination, intermediate_port, 
+                 route_index, distance_saved_percent, estimated_cost_change, estimated_days_saved, 
+                 decision_status, execution_notes, executed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    shipment_id,
+                    shipment.origin,
+                    shipment.destination,
+                    selected_route.get("intermediate_port"),
+                    payload.route_index,
+                    selected_route.get("distance_saved_percent", 0),
+                    selected_route.get("estimated_cost_change", 0),
+                    selected_route.get("estimated_days_saved", 0),
+                    "executed",
+                    payload.execution_notes or "",
+                    datetime.now(timezone.utc)
+                )
+            )
+            connection.commit()
+    
+    return ApiResponse(data={
+        "success": True,
+        "message": f"Reroute executed for shipment {shipment_id}",
+        "selected_route": selected_route
+    })
+
+
+@router.get("/shipments/{shipment_id}/reroute-history", response_model=ApiResponse)
+def get_reroute_history(shipment_id: str) -> ApiResponse:
+    """Get reroute history for a shipment."""
+    shipments = _build_shipments()
+    shipment = next((s for s in shipments if s.id == shipment_id), None)
+    
+    if not shipment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Shipment {shipment_id} not found"
+        )
+    
+    with _connect() as connection:
+        if _use_postgres():
+            rows = connection.execute(
+                """
+                SELECT id, shipment_id, original_origin, original_destination, intermediate_port,
+                       route_index, distance_saved_percent, estimated_cost_change, estimated_days_saved,
+                       decision_status, created_at, executed_at, execution_notes
+                FROM shipment_reroutes
+                WHERE shipment_id = %s
+                ORDER BY created_at DESC
+                """,
+                (shipment_id,)
+            ).fetchall()
+        else:
+            rows = connection.execute(
+                """
+                SELECT id, shipment_id, original_origin, original_destination, intermediate_port,
+                       route_index, distance_saved_percent, estimated_cost_change, estimated_days_saved,
+                       decision_status, created_at, executed_at, execution_notes
+                FROM shipment_reroutes
+                WHERE shipment_id = ?
+                ORDER BY created_at DESC
+                """,
+                (shipment_id,)
+            ).fetchall()
+    
+    history = [RerouteHistory(**dict(row)) for row in rows]
+    
+    total = len(history)
+    pending = sum(1 for h in history if h.decision_status == "pending")
+    executed = sum(1 for h in history if h.decision_status == "executed")
+    
+    response = RerouteHistoryResponse(
+        shipment_id=shipment_id,
+        total_reroutes=total,
+        pending_reroutes=pending,
+        executed_reroutes=executed,
+        history=history
+    )
+    
+    return ApiResponse(data=response.model_dump())

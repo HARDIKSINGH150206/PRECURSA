@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { motion } from 'framer-motion'
 import { Circle, CircleMarker, MapContainer, Polyline, Popup, TileLayer, Tooltip } from 'react-leaflet'
 import { FiLayers } from 'react-icons/fi'
@@ -23,7 +24,7 @@ function vesselTrail(vessel) {
   return Array.isArray(vessel?.trail) ? vessel.trail.filter((point) => Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lon))) : []
 }
 
-export default function MapView({ shipments, vessels, weatherOverlay, weatherZones = [], center, onToggleWeather, loading, error }) {
+export default function MapView({ shipments, vessels, weatherOverlay, weatherZones = [], center, onToggleWeather, loading, error, alternativeRoutes = [] }) {
   const hasCenter = Array.isArray(center) && center.length === 2 && center.every((value) => Number.isFinite(Number(value)))
 
   if (!hasCenter) {
@@ -118,10 +119,9 @@ export default function MapView({ shipments, vessels, weatherOverlay, weatherZon
             const currentPoint = trail[trail.length - 1] || vessel
 
             return (
-              <>
+              <Fragment key={`v-${vessel.mmsi || 'v'}-${index}`}>
                 {trail.length > 1 && (
                   <Polyline
-                    key={`t-${vessel.mmsi || 'v'}-${index}`}
                     positions={trail.map((point) => [point.lat, point.lon])}
                     pathOptions={{
                       color: vesselColor(vessel.sog),
@@ -155,7 +155,7 @@ export default function MapView({ shipments, vessels, weatherOverlay, weatherZon
                     Live trail points: {trail.length}
                   </Popup>
                 </CircleMarker>
-              </>
+              </Fragment>
             )
           })}
 
@@ -177,6 +177,28 @@ export default function MapView({ shipments, vessels, weatherOverlay, weatherZon
                 DRI: {shipment.dri}
               </Popup>
             </CircleMarker>
+          ))}
+
+          {alternativeRoutes.map((route, index) => (
+            <Polyline
+              key={`alt-route-${index}`}
+              positions={route.route_coords.map((coord) => [coord[0], coord[1]])}
+              pathOptions={{
+                color: '#10b981',
+                weight: 3,
+                opacity: 0.7,
+                dashArray: '5 10',
+                className: 'map-alt-route'
+              }}
+            >
+              <Popup>
+                <strong>Alternative Route {index + 1}</strong>
+                <br />
+                Distance saved: {route.distance_saved_percent}%
+                <br />
+                Estimated savings: ${route.estimated_cost_change}
+              </Popup>
+            </Polyline>
           ))}
         </MapContainer>
 

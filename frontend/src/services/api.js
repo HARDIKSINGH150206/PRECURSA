@@ -92,4 +92,23 @@ export async function explainShipmentRisk(shipment) {
   return unwrap(response)
 }
 
+export async function fetchAlternativeRoutes(shipmentId) {
+  const response = await client.get(`/shipments/${shipmentId}/routes`)
+  return unwrap(response)
+}
+
+export async function executeReroute(shipmentId, routeIndex, executionNotes = '') {
+  const response = await client.post(`/shipments/${shipmentId}/reroute`, {
+    shipment_id: shipmentId,
+    route_index: routeIndex,
+    execution_notes: executionNotes
+  })
+  return unwrap(response)
+}
+
+export async function fetchRerouteHistory(shipmentId) {
+  const response = await client.get(`/shipments/${shipmentId}/reroute-history`)
+  return unwrap(response)
+}
+
 export default client

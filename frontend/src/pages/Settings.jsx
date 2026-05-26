@@ -10,6 +10,7 @@ const MotionDiv = motion.div
 const refreshOptions = ['15s', '30s', '60s', '5m']
 const vesselFrequencyOptions = ['10s', '20s', '60s', '5m']
 const notificationOptions = ['In-app', 'Email', 'SMS', 'Slack']
+const surfaceThemeOptions = ['dark', 'ultra-dark']
 
 const widgetLabels = [
   { key: 'map', label: 'Map view' },
@@ -207,10 +208,8 @@ function Settings({ theme }) {
           if (data.dashboard_preferences.widget_visibility) {
             setWidgetVisibility(data.dashboard_preferences.widget_visibility)
           }
-          if (data.dashboard_preferences.surface_theme) {
-            setSurfaceTheme('ultra-dark')
-          } else {
-            setSurfaceTheme('ultra-dark')
+          if (surfaceThemeOptions.includes(data.dashboard_preferences.surface_theme)) {
+            setSurfaceTheme(data.dashboard_preferences.surface_theme)
           }
         }
         if (data.ai_copilot) setAiCopilot(data.ai_copilot)
@@ -501,7 +500,7 @@ function Settings({ theme }) {
                   <p className="text-sm font-medium text-slate-100">Theme selector</p>
                   <p className="mt-1 text-xs text-slate-400">Command center surface tone for dark-mode operations.</p>
                   <div className="mt-3 grid grid-cols-2 gap-3">
-                    {['dark', 'ultra-dark'].map((option) => (
+                    {surfaceThemeOptions.map((option) => (
                       <button
                         key={option}
                         type="button"

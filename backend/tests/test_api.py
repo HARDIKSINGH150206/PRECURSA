@@ -218,3 +218,113 @@ def test_settings_update_rate_limits_by_ip(monkeypatch, tmp_path):
 
         assert first.status_code == 200
         assert second.status_code == 429
+
+
+def test_reroute_execution_updates_live_shipments_and_history(monkeypatch, tmp_path):
+    main = _prepare_app(monkeypatch)
+    routes = importlib.import_module("app.api.routes")
+    storage = importlib.import_module("app.core.storage")
+
+    monkeypatch.setattr(storage, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "precursa.sqlite3")
+    monkeypatch.setattr(storage, "_INITIALIZED", False)
+
+    monkeypatch.setattr(
+        routes,
+        "calculate_dri",
+        lambda shipment: {
+            "dri": 61,
+            "rule_dri": 60,
+            "ml_dri": 61,
+            "xgb_dri": 61,
+            "lstm_dri": 61,
+            "trend": "stable",
+            "time_aware_prediction": False,
+            "confidence": 0.5,
+            "prediction_engine": "Rule-based fallback",
+            "factors": [],
+            "weather": {
+                "zone_name": shipment["current_location"],
+                "lat": shipment["lat"],
+                "lon": shipment["lon"],
+                "wind_speed": 0.0,
+                "visibility": 10.0,
+                "rain": 0.0,
+                "temperature": 28.0,
+                "weather_severity": 0,
+                "timestamp": "2026-05-18T00:00:00+00:00",
+                "source": "test",
+                "condition": "Clear",
+                "risk": 0,
+                "temp_c": 28.0,
+                "wind_kph": 0.0,
+                "humidity": 70,
+            },
+        },
+    )
+    monkeypatch.setattr(routes, "get_vessels_snapshot", lambda: [{"timestamp": "2026-05-18T00:00:00+00:00"}])
+    monkeypatch.setattr(
+        routes,
+        "get_weather",
+        lambda lat, lon, zone_name=None: {
+            "zone_name": zone_name or "Singapore",
+            "lat": lat,
+            "lon": lon,
+            "wind_speed": 0.0,
+            "visibility": 10.0,
+            "rain": 0.0,
+            "temperature": 28.0,
+            "weather_severity": 0,
+            "timestamp": "2026-05-18T00:00:00+00:00",
+            "source": "test",
+            "condition": "Clear",
+            "risk": 0,
+            "temp_c": 28.0,
+            "wind_kph": 0.0,
+            "humidity": 70,
+        },
+    )
+    monkeypatch.setattr(routes, "get_best_route", lambda origin, destination: [[19.076, 72.8777], [51.9244, 4.4777]])
+    monkeypatch.setattr(
+        routes,
+        "get_alternative_routes",
+        lambda origin, destination, count=2: [
+            {
+                "origin": origin,
+                "intermediate_port": "Hamburg",
+                "destination": destination,
+                "route_coords": [[19.076, 72.8777], [53.5511, 9.9937], [51.9244, 4.4777]],
+                "distance_km": 1.0,
+                "direct_distance_km": 1.2,
+                "distance_saved_km": 0.2,
+                "distance_saved_percent": 16.67,
+                "estimated_cost_change": -0.01,
+                "estimated_days_saved": 0.0,
+            }
+        ],
+    )
+
+    with TestClient(main.app) as client:
+        reroute_response = client.post(
+            "/shipments/SHP-001/reroute",
+            json={
+                "shipment_id": "SHP-001",
+                "route_index": 0,
+                "execution_notes": "pytest reroute",
+            },
+        )
+        assert reroute_response.status_code == 200
+        assert reroute_response.json()["data"]["selected_route"]["intermediate_port"] == "Hamburg"
+
+        shipments_response = client.get("/shipments")
+        assert shipments_response.status_code == 200
+        shipment = next(item for item in shipments_response.json()["data"] if item["id"] == "SHP-001")
+        assert shipment["rerouted"] is True
+        assert shipment["route_coords"] == [[19.076, 72.8777], [53.5511, 9.9937], [51.9244, 4.4777]]
+
+        history_response = client.get("/shipments/SHP-001/reroute-history")
+        assert history_response.status_code == 200
+        history_payload = history_response.json()["data"]
+        assert history_payload["total_reroutes"] == 1
+        assert history_payload["executed_reroutes"] == 1
+        assert history_payload["history"][0]["decision_status"] == "executed"
