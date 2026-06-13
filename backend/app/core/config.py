@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     SETTINGS_WRITE_RATE_LIMIT_MAX: int = 6
     SETTINGS_WRITE_RATE_LIMIT_WINDOW_SECONDS: int = 60
     DATABASE_URL: str = ""
+    PRELOAD_ML_MODELS: bool = True
+    ENABLE_BACKGROUND_REFRESH: bool = True
+    ENABLE_AIS_STREAM: bool = True
 
     OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"
     GEMINI_MODEL: str = "gemini-2.5-flash"

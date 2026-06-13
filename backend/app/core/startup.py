@@ -22,6 +22,10 @@ _LAST_BACKGROUND_REFRESH_ERROR: str | None = None
 
 async def start_ais_stream():
     global _AIS_STREAM_STARTED_AT
+    if not settings.ENABLE_AIS_STREAM:
+        logger.info("AIS stream startup disabled")
+        return
+
     logger.info("Starting AIS background stream task")
     _AIS_STREAM_STARTED_AT = datetime.now(timezone.utc)
     asyncio.create_task(stream_ais())
@@ -49,12 +53,20 @@ async def _refresh_operational_snapshots() -> None:
 
 async def start_background_refresh() -> None:
     global _BACKGROUND_TASK
+    if not settings.ENABLE_BACKGROUND_REFRESH:
+        logger.info("Operational refresh background task disabled")
+        return
+
     if _BACKGROUND_TASK is None or _BACKGROUND_TASK.done():
         logger.info("Starting operational refresh background task")
         _BACKGROUND_TASK = asyncio.create_task(_refresh_operational_snapshots())
 
 
 def preload_ml_model() -> None:
+    if not settings.PRELOAD_ML_MODELS:
+        logger.info("Model preloading disabled")
+        return
+
     logger.info("Preloading ML DRI model")
     load_model()
     logger.info("Preloading LSTM DRI model")
