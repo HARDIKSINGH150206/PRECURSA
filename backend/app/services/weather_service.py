@@ -1,6 +1,7 @@
 import logging
 import random
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from math import atan2, cos, radians, sin, sqrt
 from typing import Dict, Iterable, List
@@ -238,7 +239,7 @@ def _fetch_open_meteo_weather(lat: float, lon: float, zone_name: str) -> Dict[st
     }
 
     try:
-        response = requests.get(url, params=params, timeout=8)
+        response = requests.get(url, params=params, timeout=4)
         response.raise_for_status()
         payload = response.json()
 
@@ -272,12 +273,19 @@ def _fetch_open_meteo_weather(lat: float, lon: float, zone_name: str) -> Dict[st
     return None
 
 
-def get_weather(lat: float, lon: float, zone_name: str | None = None) -> Dict[str, object]:
+def get_weather(lat: float, lon: float, zone_name: str | None = None, *, live: bool = True) -> Dict[str, object]:
     cached = _get_cached(lat, lon)
     if cached:
         return cached
 
     resolved_zone = zone_name or _zone_name_for_coordinates(lat, lon)
+
+    if not live:
+        synthetic = _synthetic_weather(lat, lon, resolved_zone, source="fallback:cached-or-synthetic")
+        _set_cached(lat, lon, synthetic)
+        record_weather_snapshot(synthetic, zone_name=resolved_zone)
+        return synthetic
+
     live_weather = _fetch_open_meteo_weather(lat, lon, resolved_zone)
     if live_weather:
         _set_cached(lat, lon, live_weather)
@@ -293,18 +301,23 @@ def get_weather(lat: float, lon: float, zone_name: str | None = None) -> Dict[st
 
 def get_weather_zones() -> List[Dict[str, object]]:
     zones: List[Dict[str, object]] = []
-    for zone in MARITIME_ZONES:
-        weather = get_weather(zone["lat"], zone["lon"], zone_name=str(zone["name"]))
-        zones.append(
-            {
-                "name": zone["name"],
-                "lat": zone["lat"],
-                "lon": zone["lon"],
-                "severity": int(weather["weather_severity"]),
-                "timestamp": weather["timestamp"],
-            }
-        )
 
+    def _fetch_zone(zone: Dict[str, object]) -> Dict[str, object]:
+        weather = get_weather(zone["lat"], zone["lon"], zone_name=str(zone["name"]), live=False)
+        return {
+            "name": zone["name"],
+            "lat": zone["lat"],
+            "lon": zone["lon"],
+            "severity": int(weather["weather_severity"]),
+            "timestamp": weather["timestamp"],
+        }
+
+    with ThreadPoolExecutor(max_workers=min(5, len(MARITIME_ZONES))) as executor:
+        futures = [executor.submit(_fetch_zone, zone) for zone in MARITIME_ZONES]
+        for future in as_completed(futures):
+            zones.append(future.result())
+
+    zones.sort(key=lambda zone: zone["name"])
     return zones
 
 

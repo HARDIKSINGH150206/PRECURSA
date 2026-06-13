@@ -3,6 +3,7 @@ import logging
 from datetime import datetime, timezone
 
 from app.core.identity import ownership_status
+from app.core.config import settings
 from app.services.ais_service import stream_ais
 from app.services.global_risk_service import build_global_risk_intelligence
 from app.services.lstm_service import load_model as load_lstm_model

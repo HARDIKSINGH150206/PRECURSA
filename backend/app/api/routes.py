@@ -157,7 +157,7 @@ def _build_overview_payload() -> dict[str, object]:
     high_risk_shipments = sum(1 for shipment in shipments if shipment.dri >= 65)
     average_risk = round(sum(shipment.dri for shipment in shipments) / total_shipments) if total_shipments else 0
 
-    weather_snapshot = get_weather(DEFAULT_WEATHER_ZONE["lat"], DEFAULT_WEATHER_ZONE["lon"], zone_name=DEFAULT_WEATHER_ZONE["name"])
+    weather_snapshot = get_weather(DEFAULT_WEATHER_ZONE["lat"], DEFAULT_WEATHER_ZONE["lon"], zone_name=DEFAULT_WEATHER_ZONE["name"], live=False)
 
     risk_totals = {
         "Weather": 0,

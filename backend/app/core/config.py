@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     PRELOAD_ML_MODELS: bool = True
     ENABLE_BACKGROUND_REFRESH: bool = True
     ENABLE_AIS_STREAM: bool = True
+    ENABLE_MODEL_SCORING: bool = False
 
     OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"
     GEMINI_MODEL: str = "gemini-2.5-flash"

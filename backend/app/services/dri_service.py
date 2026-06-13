@@ -4,6 +4,7 @@ import random
 from typing import Dict
 
 from app.services.ais_service import get_vessels_snapshot
+from app.core.config import settings
 from app.services.lstm_service import predict_dri as predict_lstm_dri
 from app.services.ml_service import predict_dri
 from app.services.reroute_service import get_best_route
@@ -75,7 +76,7 @@ def calculate_dri(shipment: Dict[str, object]) -> Dict[str, object]:
     origin = str(shipment.get("origin", ""))
     destination = str(shipment.get("destination", ""))
     cargo = str(shipment.get("cargo", "general")).lower()
-    weather = get_weather(lat, lon)
+    weather = get_weather(lat, lon, live=False)
     vessel_count = len(get_vessels_snapshot())
     route_length = float(shipment.get("route_length") or _route_length_km(get_best_route(origin, destination)))
 
@@ -104,35 +105,36 @@ def calculate_dri(shipment: Dict[str, object]) -> Dict[str, object]:
     lstm_available = False
     prediction_engine = "Rule-based fallback"
 
-    try:
-        ml_result = predict_dri({
-            "weather_severity": weather_severity,
-            "congestion_score": congestion,
-            "vessel_density": vessel_count,
-            "route_length": route_length,
-            "visibility": float(weather.get("visibility", 10.0)),
-        })
-        xgb_dri = _bounded(float(ml_result.get("predicted_dri", rule_dri)))
-        ml_confidence = float(ml_result.get("confidence", 0.0))
-        xgb_available = True
-    except Exception as exc:
-        logger.warning("ML DRI prediction failed; using rule-based score: %s", exc)
+    if settings.ENABLE_MODEL_SCORING:
+        try:
+            ml_result = predict_dri({
+                "weather_severity": weather_severity,
+                "congestion_score": congestion,
+                "vessel_density": vessel_count,
+                "route_length": route_length,
+                "visibility": float(weather.get("visibility", 10.0)),
+            })
+            xgb_dri = _bounded(float(ml_result.get("predicted_dri", rule_dri)))
+            ml_confidence = float(ml_result.get("confidence", 0.0))
+            xgb_available = True
+        except Exception as exc:
+            logger.warning("ML DRI prediction failed; using rule-based score: %s", exc)
 
-    try:
-        lstm_result = predict_lstm_dri(
-            _build_sequence(
-                shipment_id=shipment_id,
-                weather_severity=weather_severity,
-                congestion=congestion,
-                vessel_density=vessel_count,
-                visibility=float(weather.get("visibility", 10.0)),
+        try:
+            lstm_result = predict_lstm_dri(
+                _build_sequence(
+                    shipment_id=shipment_id,
+                    weather_severity=weather_severity,
+                    congestion=congestion,
+                    vessel_density=vessel_count,
+                    visibility=float(weather.get("visibility", 10.0)),
+                )
             )
-        )
-        lstm_dri = _bounded(float(lstm_result.get("lstm_dri", rule_dri)))
-        trend = str(lstm_result.get("trend", "stable"))
-        lstm_available = True
-    except Exception as exc:
-        logger.warning("LSTM DRI prediction failed; skipping time-series component: %s", exc)
+            lstm_dri = _bounded(float(lstm_result.get("lstm_dri", rule_dri)))
+            trend = str(lstm_result.get("trend", "stable"))
+            lstm_available = True
+        except Exception as exc:
+            logger.warning("LSTM DRI prediction failed; skipping time-series component: %s", exc)
 
     if xgb_available and lstm_available:
         prediction_engine = "Hybrid (Rule + ML + LSTM)"
