@@ -36,6 +36,20 @@ DEFAULT_WEATHER_ZONE = get_primary_zone()
 SETTINGS_KEY = "operator-settings"
 _WRITE_RATE_LIMIT_LOCK = Lock()
 _WRITE_RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+_SHIPMENTS_CACHE_LOCK = Lock()
+_SHIPMENTS_CACHE: list[ShipmentOut] | None = None
+_SHIPMENTS_CACHE_AT = 0.0
+_SHIPMENTS_CACHE_TTL_SECONDS = 20.0
+
+_OVERVIEW_CACHE_LOCK = Lock()
+_OVERVIEW_CACHE: dict[str, object] | None = None
+_OVERVIEW_CACHE_AT = 0.0
+_OVERVIEW_CACHE_TTL_SECONDS = 20.0
+
+_WEATHER_ZONES_CACHE_LOCK = Lock()
+_WEATHER_ZONES_CACHE: list[dict[str, object]] | None = None
+_WEATHER_ZONES_CACHE_AT = 0.0
+_WEATHER_ZONES_CACHE_TTL_SECONDS = 60.0
 
 
 def _default_settings() -> dict[str, object]:
@@ -118,6 +132,109 @@ def _build_shipments() -> List[ShipmentOut]:
     return shipments
 
 
+def _get_cached_shipments() -> List[ShipmentOut]:
+    global _SHIPMENTS_CACHE, _SHIPMENTS_CACHE_AT
+
+    now = time.monotonic()
+    with _SHIPMENTS_CACHE_LOCK:
+        if _SHIPMENTS_CACHE is not None and now - _SHIPMENTS_CACHE_AT < _SHIPMENTS_CACHE_TTL_SECONDS:
+            return list(_SHIPMENTS_CACHE)
+
+    shipments = _build_shipments()
+
+    with _SHIPMENTS_CACHE_LOCK:
+        _SHIPMENTS_CACHE = list(shipments)
+        _SHIPMENTS_CACHE_AT = now
+
+    return shipments
+
+
+def _build_overview_payload() -> dict[str, object]:
+    shipments = _get_cached_shipments()
+    active_vessels = get_vessels_snapshot()
+
+    total_shipments = len(shipments)
+    high_risk_shipments = sum(1 for shipment in shipments if shipment.dri >= 65)
+    average_risk = round(sum(shipment.dri for shipment in shipments) / total_shipments) if total_shipments else 0
+
+    weather_snapshot = get_weather(DEFAULT_WEATHER_ZONE["lat"], DEFAULT_WEATHER_ZONE["lon"], zone_name=DEFAULT_WEATHER_ZONE["name"])
+
+    risk_totals = {
+        "Weather": 0,
+        "Congestion": 0,
+        "Tariff": 0,
+        "Carrier": 0,
+        "Others": 0,
+    }
+
+    for shipment in shipments:
+        for factor in shipment.factors:
+            if factor.name == "Weather Severity":
+                risk_totals["Weather"] += factor.value
+            elif factor.name == "Port Congestion":
+                risk_totals["Congestion"] += factor.value
+            elif factor.name == "Tariff Risk":
+                risk_totals["Tariff"] += factor.value
+            elif factor.name == "Carrier Risk":
+                risk_totals["Carrier"] += factor.value
+            else:
+                risk_totals["Others"] += factor.value
+
+    total_factor = sum(risk_totals.values()) or 1
+    risk_breakdown = [
+        {"name": key, "value": round(value / total_factor * 100)}
+        for key, value in risk_totals.items()
+    ]
+
+    top_shipments = sorted(shipments, key=lambda shipment: shipment.dri, reverse=True)[:7]
+
+    overview = DashboardOverview(
+        total_shipments=total_shipments,
+        high_risk_shipments=high_risk_shipments,
+        active_vessels=len(active_vessels),
+        average_risk=average_risk,
+        current_weather=weather_snapshot,
+        risk_breakdown=risk_breakdown,
+        top_shipments=top_shipments,
+    )
+
+    return overview.model_dump()
+
+
+def _get_cached_overview() -> dict[str, object]:
+    global _OVERVIEW_CACHE, _OVERVIEW_CACHE_AT
+
+    now = time.monotonic()
+    with _OVERVIEW_CACHE_LOCK:
+        if _OVERVIEW_CACHE is not None and now - _OVERVIEW_CACHE_AT < _OVERVIEW_CACHE_TTL_SECONDS:
+            return dict(_OVERVIEW_CACHE)
+
+    overview = _build_overview_payload()
+
+    with _OVERVIEW_CACHE_LOCK:
+        _OVERVIEW_CACHE = dict(overview)
+        _OVERVIEW_CACHE_AT = now
+
+    return overview
+
+
+def _get_cached_weather_zones() -> list[dict[str, object]]:
+    global _WEATHER_ZONES_CACHE, _WEATHER_ZONES_CACHE_AT
+
+    now = time.monotonic()
+    with _WEATHER_ZONES_CACHE_LOCK:
+        if _WEATHER_ZONES_CACHE is not None and now - _WEATHER_ZONES_CACHE_AT < _WEATHER_ZONES_CACHE_TTL_SECONDS:
+            return list(_WEATHER_ZONES_CACHE)
+
+    zones = get_weather_zones()
+
+    with _WEATHER_ZONES_CACHE_LOCK:
+        _WEATHER_ZONES_CACHE = list(zones)
+        _WEATHER_ZONES_CACHE_AT = now
+
+    return zones
+
+
 @router.get("/health", response_model=ApiResponse)
 def health() -> ApiResponse:
     return ApiResponse(data={"service": "precursa-api", "healthy": True})
@@ -194,7 +311,7 @@ def update_settings(
 
 @router.get("/shipments", response_model=ApiResponse)
 def get_shipments() -> ApiResponse:
-    shipments = _build_shipments()
+    shipments = _get_cached_shipments()
     return ApiResponse(data=[item.model_dump() for item in shipments])
 
 
@@ -210,7 +327,7 @@ def get_weather_endpoint(lat: float = DEFAULT_WEATHER_ZONE["lat"], lon: float = 
 
 @router.get("/weather/zones", response_model=ApiResponse)
 def get_weather_zones_endpoint() -> ApiResponse:
-    return ApiResponse(data=get_weather_zones())
+    return ApiResponse(data=_get_cached_weather_zones())
 
 
 @router.get("/global-risk", response_model=ApiResponse)
@@ -220,55 +337,7 @@ def global_risk_endpoint(window: str = "24h") -> ApiResponse:
 
 @router.get("/dashboard/overview", response_model=ApiResponse)
 def dashboard_overview() -> ApiResponse:
-    shipments = _build_shipments()
-    active_vessels = get_vessels_snapshot()
-
-    total_shipments = len(shipments)
-    high_risk_shipments = sum(1 for shipment in shipments if shipment.dri >= 65)
-    average_risk = round(sum(shipment.dri for shipment in shipments) / total_shipments) if total_shipments else 0
-
-    weather_snapshot = get_weather(DEFAULT_WEATHER_ZONE["lat"], DEFAULT_WEATHER_ZONE["lon"], zone_name=DEFAULT_WEATHER_ZONE["name"])
-
-    risk_totals = {
-        "Weather": 0,
-        "Congestion": 0,
-        "Tariff": 0,
-        "Carrier": 0,
-        "Others": 0,
-    }
-
-    for shipment in shipments:
-        for factor in shipment.factors:
-            if factor.name == "Weather Severity":
-                risk_totals["Weather"] += factor.value
-            elif factor.name == "Port Congestion":
-                risk_totals["Congestion"] += factor.value
-            elif factor.name == "Tariff Risk":
-                risk_totals["Tariff"] += factor.value
-            elif factor.name == "Carrier Risk":
-                risk_totals["Carrier"] += factor.value
-            else:
-                risk_totals["Others"] += factor.value
-
-    total_factor = sum(risk_totals.values()) or 1
-    risk_breakdown = [
-        {"name": key, "value": round(value / total_factor * 100)}
-        for key, value in risk_totals.items()
-    ]
-
-    top_shipments = sorted(shipments, key=lambda shipment: shipment.dri, reverse=True)[:7]
-
-    overview = DashboardOverview(
-        total_shipments=total_shipments,
-        high_risk_shipments=high_risk_shipments,
-        active_vessels=len(active_vessels),
-        average_risk=average_risk,
-        current_weather=weather_snapshot,
-        risk_breakdown=risk_breakdown,
-        top_shipments=top_shipments,
-    )
-
-    return ApiResponse(data=overview.model_dump())
+    return ApiResponse(data=_get_cached_overview())
 
 
 @router.post("/explain-risk", response_model=ApiResponse)
