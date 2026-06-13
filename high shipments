@@ -1,0 +1,15 @@
+@app.get("/high-risk-ships")
+def get_high_risk_ships():
+
+    query = text("""
+        SELECT COUNT(*) AS high_risk_ships
+        FROM risk_scores
+        WHERE overall_risk >= 75
+    """)
+
+    with engine.connect() as connection:
+        result = connection.execute(query).fetchone()
+
+    return {
+        "high_risk_ships": result[0]
+    }
