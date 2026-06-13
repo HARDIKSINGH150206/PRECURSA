@@ -127,17 +127,35 @@ function DashboardShell() {
 
   const loadData = useCallback(async () => {
     try {
-      const [shipmentsData, vesselsData, overviewData] = await Promise.all([
+      const [shipmentsResult, vesselsResult, overviewResult] = await Promise.allSettled([
         fetchShipments(),
         fetchVessels(),
         fetchDashboardOverview()
       ])
 
-      setShipments(Array.isArray(shipmentsData) ? shipmentsData : [])
-      setVessels(Array.isArray(vesselsData) ? vesselsData : [])
-      setOverview(overviewData || null)
+      if (shipmentsResult.status === 'fulfilled') {
+        setShipments(Array.isArray(shipmentsResult.value) ? shipmentsResult.value : [])
+      }
+
+      if (vesselsResult.status === 'fulfilled') {
+        setVessels(Array.isArray(vesselsResult.value) ? vesselsResult.value : [])
+      }
+
+      if (overviewResult.status === 'fulfilled') {
+        setOverview(overviewResult.value || null)
+      }
+
       setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }))
-      setError('')
+      const rejected = [shipmentsResult, vesselsResult, overviewResult].filter((result) => result.status === 'rejected')
+      if (rejected.length === 0) {
+        setError('')
+      } else if (rejected.length === 3) {
+        const firstError = rejected[0].reason
+        const msg = firstError?.response?.data?.detail || firstError?.message || 'Unable to connect to backend.'
+        setError(msg)
+      } else {
+        setError('')
+      }
     } catch (err) {
       const msg = err?.response?.data?.detail || err?.message || 'Unable to connect to backend.'
       setError(msg)
